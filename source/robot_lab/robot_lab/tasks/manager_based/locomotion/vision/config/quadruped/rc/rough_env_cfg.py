@@ -3,7 +3,7 @@
 
 from isaaclab.utils import configclass
 
-from robot_lab.tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
+from robot_lab.tasks.manager_based.locomotion.vision.velocity_env_cfg import LocomotionVelocityTeacherEnvCfg
 
 ##
 # Pre-defined configs
@@ -13,13 +13,14 @@ from robot_lab.tasks.manager_based.locomotion.velocity.velocity_env_cfg import L
 # use local assets
 #from robot_lab.assets.unitree import UNITREE_A1_CFG  # isort: skip
 from robot_lab.assets.rc import RC_CFG  # isort: skip
-from robot_lab.tasks.manager_based.locomotion.velocity.mdp.stair_slope import STAIR_SLOPE_CFG  # isort: skip
+from robot_lab.tasks.manager_based.locomotion.vision.mdp.stair_slope import STAIR_SLOPE_CFG  # isort: skip
 
 
 @configclass
-class RCRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
+class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
     base_link_name = "base"
     #base和trunk是固定关节连接且位置相同，可视为一体
+    
     foot_link_name = ".*_foot"
     # fmt: off
     joint_names = [
@@ -52,14 +53,11 @@ class RCRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.observations.policy.joint_vel.scale = 0.05
 
         ##此处含义是不将这些作为policy的观测输入
-        self.observations.policy.base_lin_vel = None
-
-        self.observations.policy.height_scan = None
-        #self.observations.critic.joint_effort = None
-
 
         self.observations.policy.joint_pos.params["asset_cfg"].joint_names = self.joint_names
         self.observations.policy.joint_vel.params["asset_cfg"].joint_names = self.joint_names
+        self.observations.policy.joint_effort.params["asset_cfg"].joint_names = self.joint_names
+        self.observations.policy.foot_friction.params["asset_cfg"].body_names = self.foot_link_name
         #此文件是继承自velocity_env_cfg.py的，对于为显式覆盖的变量，均采用父类的默认值
         #list：基座角速度（base_ang_vel）
             # 投影重力向量（projected_gravity）
@@ -149,8 +147,8 @@ class RCRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.feet_stumble.weight = 0
         self.rewards.feet_stumble.params["sensor_cfg"].body_names = [self.foot_link_name]
         self.rewards.feet_slide.weight = 0
-        self.rewards.feet_slide.params["sensor_cfg"].body_names = [self.foot_link_name]
-        self.rewards.feet_slide.params["asset_cfg"].body_names = [self.foot_link_name]
+        #self.rewards.feet_slide.params["sensor_cfg"].body_names = [self.foot_link_name]
+        #self.rewards.feet_slide.params["asset_cfg"].body_names = [self.foot_link_name]
         self.rewards.feet_height.weight = 0
         self.rewards.feet_height.params["target_height"] = 0.05
         self.rewards.feet_height.params["asset_cfg"].body_names = [self.foot_link_name]

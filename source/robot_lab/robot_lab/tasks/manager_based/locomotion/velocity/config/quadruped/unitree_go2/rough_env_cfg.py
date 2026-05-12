@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2026 Ziqi Fan
+# Copyright (c) 2024-2025 Ziqi Fan
 # SPDX-License-Identifier: Apache-2.0
 
 from isaaclab.utils import configclass
@@ -84,7 +84,7 @@ class UnitreeGo2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # Root penalties
         self.rewards.lin_vel_z_l2.weight = -2.0
-        self.rewards.ang_vel_xy_l2.weight = -0.05
+        self.rewards.ang_vel_xy_l2.weight = -0.5
         self.rewards.flat_orientation_l2.weight = 0
         self.rewards.base_height_l2.weight = 0
         self.rewards.base_height_l2.params["target_height"] = 0.33
@@ -155,10 +155,8 @@ class UnitreeGo2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.terminations.illegal_contact = None
 
         # ------------------------------Curriculums------------------------------
-        # self.curriculum.command_levels_lin_vel.params["range_multiplier"] = (0.2, 1.0)
-        # self.curriculum.command_levels_ang_vel.params["range_multiplier"] = (0.2, 1.0)
-        self.curriculum.command_levels_lin_vel = None
-        self.curriculum.command_levels_ang_vel = None
+        # self.curriculum.command_levels.params["range_multiplier"] = (0.2, 1.0)
+        self.curriculum.command_levels = None
 
         # ------------------------------Commands------------------------------
         # self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)

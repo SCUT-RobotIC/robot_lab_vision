@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2026 Ziqi Fan
+# Copyright (c) 2024-2025 Ziqi Fan
 # SPDX-License-Identifier: Apache-2.0
 
 from isaaclab.managers import RewardTermCfg as RewTerm
@@ -223,10 +223,8 @@ class MagicDogWRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.terminations.illegal_contact = None
 
         # ------------------------------Curriculums------------------------------
-        # self.curriculum.command_levels_lin_vel.params["range_multiplier"] = (0.2, 1.0)
-        # self.curriculum.command_levels_ang_vel.params["range_multiplier"] = (0.2, 1.0)
-        self.curriculum.command_levels_lin_vel = None
-        self.curriculum.command_levels_ang_vel = None
+        # self.curriculum.command_levels.params["range_multiplier"] = (0.2, 1.0)
+        self.curriculum.command_levels = None
 
         # ------------------------------Commands------------------------------
         # self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1.5)

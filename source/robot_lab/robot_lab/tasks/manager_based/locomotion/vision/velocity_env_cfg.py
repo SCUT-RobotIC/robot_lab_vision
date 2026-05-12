@@ -26,7 +26,7 @@ from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
-import robot_lab.tasks.manager_based.locomotion.velocity.mdp as mdp
+import robot_lab.tasks.manager_based.locomotion.vision.mdp as mdp
 
 ##
 # Pre-defined configs
@@ -225,7 +225,7 @@ class ObservationsCfg:
         )
 
         terrain_level_normalized = ObsTerm(
-            func=mdp.terrain_level_normalized,
+            func=mdp.terrain_step_height,
             clip=(-100.0, 100.0),
             scale=1.0,
             #history_length=5,
@@ -675,6 +675,7 @@ class RewardsCfg:
     feet_slide = RewTerm(
         func=mdp.feet_slide,
         weight=0.0,
+        params={
             "target_height": 0.05,
 
             "command_name": "base_velocity",
@@ -717,12 +718,14 @@ class RewardsCfg:
     # )
     #对落足点进行鼓励或惩罚，可动态设计落足点的长度
 
-    upward = RewTerm(func=mdp.upward, weight=0.0)       params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=""),
-            "asset_cfg": SceneEntityCfg("robot", body_names=""),
-        },
-    )
-    #检验侧滑，需要结合rough_env_cfg理解
+    upward = RewTerm(func=mdp.upward, weight=0.0)       
+    
+    # params={
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=""),
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=""),
+    #     },
+    # )
+    # #检验侧滑，需要结合rough_env_cfg理解
 
     feet_height = RewTerm(
         func=mdp.feet_height,

@@ -13,7 +13,7 @@ from robot_lab.tasks.manager_based.locomotion.vision.velocity_env_cfg import Loc
 # use local assets
 #from robot_lab.assets.unitree import UNITREE_A1_CFG  # isort: skip
 from robot_lab.assets.rc import RC_CFG  # isort: skip
-from robot_lab.tasks.manager_based.locomotion.velocity.mdp.stair_slope import STAIR_SLOPE_CFG  # isort: skip
+from robot_lab.tasks.manager_based.locomotion.vision.mdp.stair_slope import STAIR_SLOPE_CFG  # isort: skip
 
 
 @configclass

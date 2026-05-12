@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2026 Ziqi Fan
+# Copyright (c) 2024-2025 Ziqi Fan
 # SPDX-License-Identifier: Apache-2.0
 
 import math
@@ -105,8 +105,8 @@ class UnitreeA1HandStandRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         ]
         self.events.randomize_com_positions.params["asset_cfg"].body_names = [self.base_link_name]
         self.events.randomize_apply_external_force_torque.params["asset_cfg"].body_names = [self.base_link_name]
-        self.events.randomize_rigid_body_mass_base = None
-        self.events.randomize_rigid_body_mass_others = None
+
+        self.events.randomize_rigid_body_mass = None
         self.events.randomize_com_positions = None
         self.events.randomize_apply_external_force_torque = None
 
@@ -198,10 +198,8 @@ class UnitreeA1HandStandRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.terminations.illegal_contact.params["sensor_cfg"].body_names = [f"^(?!.*{self.foot_link_name}).*"]
 
         # ------------------------------Curriculums------------------------------
-        # self.curriculum.command_levels_lin_vel.params["range_multiplier"] = (0.2, 1.0)
-        # self.curriculum.command_levels_ang_vel.params["range_multiplier"] = (0.2, 1.0)
-        self.curriculum.command_levels_lin_vel = None
-        self.curriculum.command_levels_ang_vel = None
+        # self.curriculum.command_levels.params["range_multiplier"] = (0.2, 1.0)
+        self.curriculum.command_levels = None
 
         # ------------------------------Commands------------------------------
         # self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)

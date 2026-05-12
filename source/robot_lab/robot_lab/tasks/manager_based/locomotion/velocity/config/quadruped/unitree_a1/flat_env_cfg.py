@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2026 Ziqi Fan
+# Copyright (c) 2024-2025 Ziqi Fan
 # SPDX-License-Identifier: Apache-2.0
 
 from isaaclab.utils import configclass
@@ -20,6 +20,8 @@ class UnitreeA1FlatEnvCfg(UnitreeA1RoughEnvCfg):
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
+
+        #由于将self.scene.height_scanner = None设定为none，仍保留critic的话会报错，所以也将critic的height_scan设定为none
         self.observations.critic.height_scan = None
         # no terrain curriculum
         self.curriculum.terrain_levels = None

@@ -47,7 +47,7 @@ class RCFlatEnvCfg(RCRoughEnvCfg):
         self.rewards.base_height_l2.weight = -8.0
         self.rewards.base_height_l2.params["target_height"] = 0.30#其中障碍赛中height为300限高，即最好设定为0.2或更低
         self.rewards.base_height_l2.params["asset_cfg"].body_names = [self.base_link_name]
-        self.rewards.body_lin_acc_l2n eight = 0
+        self.rewards.body_lin_acc_l2.weight = 0
         self.rewards.body_lin_acc_l2.params["asset_cfg"].body_names = [self.base_link_name]
 
         # Joint penalties

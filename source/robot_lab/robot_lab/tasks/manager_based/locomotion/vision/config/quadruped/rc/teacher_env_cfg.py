@@ -161,7 +161,7 @@ class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
 
         # If the weight of rewards is 0, set rewards to None
         #if self.__class__.__name__ == "UnitreeA1RoughEnvCfg":
-        if self.__class__.__name__ == "RCRoughEnvCfg":
+        if self.__class__.__name__ == "RCVisionTeacherEnvCfg":
             self.disable_zero_weight_rewards()
 
         # ------------------------------Terminations------------------------------

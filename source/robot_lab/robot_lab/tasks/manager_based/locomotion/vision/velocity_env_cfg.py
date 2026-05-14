@@ -48,6 +48,7 @@ class MySceneCfg(InteractiveSceneCfg):
         prim_path="/World/ground",
         terrain_type="generator",
         terrain_generator=ROUGH_TERRAINS_CFG,#在子文件中进行覆盖
+        
         max_init_terrain_level=5,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
@@ -244,11 +245,84 @@ class ObservationsCfg:
             self.enable_corruption = False
             self.concatenate_terms = True
 
-   
+    class NoisePolicyCfg(ObsGroup):
+        # observation terms (order preserved)
+        base_lin_vel = ObsTerm(
+            func=mdp.base_lin_vel,
+            noise=Unoise(n_min=-0.1, n_max=0.1),
+            clip=(-100.0, 100.0),
+            scale=1.0,
+            history_length=5,
+            flatten_history_dim=True,
+        )
+        base_ang_vel = ObsTerm(
+            func=mdp.base_ang_vel,
+            noise=Unoise(n_min=-0.2, n_max=0.2),
+            clip=(-100.0, 100.0),
+            scale=1.0,
+            history_length=5,
+            flatten_history_dim=True,
+        )
+        projected_gravity = ObsTerm(
+            func=mdp.projected_gravity,
+            noise=Unoise(n_min=-0.05, n_max=0.05),
+            clip=(-100.0, 100.0),
+            scale=1.0,
+            history_length=5,
+            flatten_history_dim=True,
+        )
+        velocity_commands = ObsTerm(
+            func=mdp.generated_commands,
+            params={"command_name": "base_velocity"},
+            clip=(-100.0, 100.0),
+            scale=1.0,
+            history_length=5,
+            flatten_history_dim=True,
+        )
+        joint_pos = ObsTerm(
+            func=mdp.joint_pos_rel,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*", preserve_order=True)},
+            noise=Unoise(n_min=-0.03, n_max=0.03),
+            clip=(-100.0, 100.0),
+            scale=1.0,
+            history_length=5,
+            flatten_history_dim=True,
+        )
+        joint_vel = ObsTerm(
+            func=mdp.joint_vel_rel,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*", preserve_order=True)},
+            noise=Unoise(n_min=-1.5, n_max=1.5),
+            clip=(-100.0, 100.0),
+            scale=1.0,
+            history_length=5,
+            flatten_history_dim=True,
+        )
+        actions = ObsTerm(
+            func=mdp.last_action,
+            clip=(-100.0, 100.0),
+            scale=1.0,
+            history_length=5,
+            flatten_history_dim=True,
+        )
+        height_scan = ObsTerm(
+            func=mdp.height_scan,
+            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+            noise=Unoise(n_min=-0.1, n_max=0.1),
+            clip=(-1.0, 1.0),
+            scale=1.0,
+            #history_length=5,
+            flatten_history_dim=True,
+        )
+
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
-    critic: PolicyCfg = PolicyCfg()
+    noise_policy: NoisePolicyCfg = NoisePolicyCfg()
+    #depth_images
+
 
 
 @configclass
@@ -674,13 +748,12 @@ class RewardsCfg:
 
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=0.0,
         params={
-            "target_height": 0.05,
-
-            "command_name": "base_velocity",
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=""),
+            "asset_cfg": SceneEntityCfg("robot", body_names=""),
         },
     )
+    #检验侧滑，需要结合rough_env_cfg理解
 
     feet_height_body = RewTerm(
         func=mdp.feet_height_body,
@@ -720,12 +793,7 @@ class RewardsCfg:
 
     upward = RewTerm(func=mdp.upward, weight=0.0)       
     
-    # params={
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=""),
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=""),
-    #     },
-    # )
-    # #检验侧滑，需要结合rough_env_cfg理解
+
 
     feet_height = RewTerm(
         func=mdp.feet_height,

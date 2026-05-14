@@ -56,27 +56,37 @@ def feet_friction(
 
 def terrain_step_height(env: ManagerBasedRLEnv) -> torch.Tensor:
     """返回当前地形的实际 step_height (m)，作为特权信息。"""
+    from .utils import _get_terrain_column_range
+
     terrain = env.scene.terrain
-    levels = terrain.terrain_levels.float()
-    types = terrain.terrain_types
-    num_cols = terrain.cfg.num_cols
+    terrain_cfg = getattr(terrain.cfg, "terrain_generator", None)
     device = env.device
-
-    # 难度 ∈ [0, 1]
-    difficulty = levels / max(num_cols - 1, 1)
-    ##############################################################
-    # 每种地形的 step_height_range，顺序和 sub_terrains 一致
-    # (type_index, min, max)
-    #############################################################
-    height_configs = [
-        (0, 0.0, 0.15),   # pyramid_stairs
-        (1, 0.0, 0.15),   # pyramid_stairs_inv
-    ]
-
+    
     step_height = torch.zeros(env.num_envs, device=device)
-    for type_idx, h_min, h_max in height_configs:
-        mask = (types == type_idx)
-        step_height[mask] = h_min + (h_max - h_min) * difficulty[mask]
+    if terrain_cfg is None or terrain_cfg.sub_terrains is None:
+        return step_height.unsqueeze(-1)
+        
+    levels = terrain.terrain_levels.float()
+    types = terrain.terrain_types  # 这个在 IsaacLab 是列索引(column index)
+    
+    difficulty = levels / max(terrain_cfg.num_rows - 1, 1)
+
+    sub_terrain_names = list(terrain_cfg.sub_terrains.keys())
+
+    for terrain_name in sub_terrain_names:
+        sub_cfg = terrain_cfg.sub_terrains[terrain_name]
+        
+        h_min, h_max = 0.0, 0.0
+        if hasattr(sub_cfg, "step_height_range"):
+            h_min, h_max = sub_cfg.step_height_range
+            
+        if h_min != 0.0 or h_max != 0.0:
+            # 💡 直接调用你的内置工具函数
+            col_range = _get_terrain_column_range(terrain_cfg, terrain_name, device)
+            if col_range is not None:
+                col_start, col_end = col_range
+                mask = (types >= col_start) & (types < col_end)
+                step_height[mask] = h_min + (h_max - h_min) * difficulty[mask]
 
     return step_height.unsqueeze(-1)  # (num_envs, 1)
         

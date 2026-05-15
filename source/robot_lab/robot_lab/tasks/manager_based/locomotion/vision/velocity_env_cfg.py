@@ -52,8 +52,8 @@ class MySceneCfg(InteractiveSceneCfg):
         max_init_terrain_level=0,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
+            # friction_combine_mode="multiply",
+            # restitution_combine_mode="multiply",
             static_friction=0.3,
             dynamic_friction=0.3,
             restitution=0.2,
@@ -900,7 +900,7 @@ class CurriculumCfg:
     #     func=mdp.command_levels_lin_vel,
     #     params={
     #         "reward_term_name": "track_lin_vel_xy_exp",
-    #         "range_multiplier": (0.1, 1.0),
+    #         "range_multiplier": (0.5, 1.0),
     #     },
     # )
 

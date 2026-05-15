@@ -43,21 +43,22 @@ def feet_friction(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=".*_foot"),
 ) -> torch.Tensor:
     """每步读取，适用于 reset 模式的摩擦随机化"""
-    asset = env.scene[asset_cfg.name]
-    material_props = asset.root_physx_view.get_material_properties()
-
-    # 统一成 torch.Tensor 并放到 env.device
-    material_props = torch.as_tensor(material_props, device=env.device)
-
-    robot_friction = material_props[:, asset_cfg.body_ids, 0]
-
+    # 初始化缓冲区：形状为 (num_envs, 4)，初始值为 0.3
+    if not hasattr(env, "friction_buffer") or env.friction_buffer is None:
+        env.friction_buffer = torch.full(
+            (env.num_envs, 4), 0.3, device=env.device, dtype=torch.float32
+        )
+    
+    # 从环境中读取 terrain_friction
     terrain_friction = env.scene.terrain.cfg.physics_material.static_friction
-    terrain_friction = torch.as_tensor(terrain_friction, device=env.device, dtype=robot_friction.dtype)
-
-    return robot_friction * terrain_friction
-
-
-
+    terrain_friction = torch.as_tensor(
+        terrain_friction, device=env.device, dtype=torch.float32
+    )
+    
+    # 用 terrain_friction 覆盖缓冲区的值
+    env.friction_buffer.fill_(terrain_friction)
+    
+    return env.friction_buffer
 
 
 

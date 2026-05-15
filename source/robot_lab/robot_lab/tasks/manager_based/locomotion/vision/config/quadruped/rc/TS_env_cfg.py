@@ -52,6 +52,9 @@ class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
         self.observations.policy.joint_pos.scale = 1.0
         self.observations.policy.joint_vel.scale = 0.05
 
+
+
+
         self.observations.noise_policy.base_lin_vel = None
         self.observations.noise_policy.height_scan = None
         ##此处含义是不将这些作为policy的观测输入
@@ -65,6 +68,11 @@ class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
             # 投影重力向量（projected_gravity）
             # 速度指令（velocity_commands）
             # 上一时刻动作（actions）
+
+
+        # self.observations.policy.feet_friction=None
+        # self.observations.policy.terrain_level_normalized=None
+        # self.observations.policy.terrain_type_index=None
         # ------------------------------Events------------------------------
         self.events.randomize_reset_base.params = {
             "pose_range": {
@@ -104,7 +112,7 @@ class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
         self.rewards.flat_orientation_l2.weight = -0.1
         self.rewards.lin_vel_xy_delta_l2.weight = -1.5
         self.rewards.base_height_l2.weight = -15.0
-        self.rewards.base_height_l2.params["target_height"] = 0.35
+        self.rewards.base_height_l2.params["target_height"] = 0.30
         self.rewards.base_height_l2.params["asset_cfg"].body_names = [self.base_link_name]
         self.rewards.body_lin_acc_l2.weight = 0
         self.rewards.body_lin_acc_l2.params["asset_cfg"].body_names = [self.base_link_name]
@@ -172,6 +180,6 @@ class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
 
         # ------------------------------Curriculums------------------------------
         # self.curriculum.command_levels.params["range_multiplier"] = (0.2, 1.0)
-        self.curriculum.command_levels = None
+        #self.curriculum.command_levels = None
 
         # ------------------------------Commands------------------------------

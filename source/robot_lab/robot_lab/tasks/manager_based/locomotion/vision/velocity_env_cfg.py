@@ -49,7 +49,7 @@ class MySceneCfg(InteractiveSceneCfg):
         terrain_type="generator",
         terrain_generator=ROUGH_TERRAINS_CFG,#在子文件中进行覆盖
         
-        max_init_terrain_level=5,
+        max_init_terrain_level=0,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
@@ -131,7 +131,7 @@ class ActionsCfg:
 class ObservationsCfg:
     """Observation specifications for the MDP."""
 
-#为了使得教师模型拥有先验知识，将policy和critic都设定的完全一样，且均包含所有的观测项（即不进行观测屏蔽），在后续的学生模型中再进行观测屏蔽和观测项的调整
+
 
     @configclass
     class PolicyCfg(ObsGroup):
@@ -218,7 +218,7 @@ class ObservationsCfg:
         )
     
         #根本没有变化的，不做历史化处理
-        foot_friction = ObsTerm(
+        feet_friction = ObsTerm(
             func=mdp.feet_friction,
             clip=(-100, 100),
             scale=1.0,
@@ -241,10 +241,21 @@ class ObservationsCfg:
             flatten_history_dim=True,
         )
 
+        height_scan = ObsTerm(
+            func=mdp.height_scan,
+            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+            noise=Unoise(n_min=-0.1, n_max=0.1),
+            clip=(-1.0, 1.0),
+            scale=1.0,
+            #history_length=5,
+            flatten_history_dim=True,
+        )
+
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
 
+    @configclass
     class NoisePolicyCfg(ObsGroup):
         # observation terms (order preserved)
         base_lin_vel = ObsTerm(
@@ -885,21 +896,21 @@ class CurriculumCfg:
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
-    command_levels_lin_vel = CurrTerm(
-        func=mdp.command_levels_lin_vel,
-        params={
-            "reward_term_name": "track_lin_vel_xy_exp",
-            "range_multiplier": (0.1, 1.0),
-        },
-    )
+    # command_levels_lin_vel = CurrTerm(
+    #     func=mdp.command_levels_lin_vel,
+    #     params={
+    #         "reward_term_name": "track_lin_vel_xy_exp",
+    #         "range_multiplier": (0.1, 1.0),
+    #     },
+    # )
 
-    command_levels_ang_vel = CurrTerm(
-        func=mdp.command_levels_ang_vel,
-        params={
-            "reward_term_name": "track_ang_vel_z_exp",
-            "range_multiplier": (0.1, 1.0),
-        },
-    )
+    # command_levels_ang_vel = CurrTerm(
+    #     func=mdp.command_levels_ang_vel,
+    #     params={
+    #         "reward_term_name": "track_ang_vel_z_exp",
+    #         "range_multiplier": (0.1, 1.0),
+    #     },
+    # )
 
 
 ##

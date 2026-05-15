@@ -45,8 +45,15 @@ def feet_friction(
     """每步读取，适用于 reset 模式的摩擦随机化"""
     asset = env.scene[asset_cfg.name]
     material_props = asset.root_physx_view.get_material_properties()
+
+    # 统一成 torch.Tensor 并放到 env.device
+    material_props = torch.as_tensor(material_props, device=env.device)
+
     robot_friction = material_props[:, asset_cfg.body_ids, 0]
+
     terrain_friction = env.scene.terrain.cfg.physics_material.static_friction
+    terrain_friction = torch.as_tensor(terrain_friction, device=env.device, dtype=robot_friction.dtype)
+
     return robot_friction * terrain_friction
 
 
@@ -94,5 +101,5 @@ def terrain_step_height(env: ManagerBasedRLEnv) -> torch.Tensor:
 def terrain_type_index(env: ManagerBasedRLEnv) -> torch.Tensor:
     """返回当前地形类型索引，作为特权信息。"""
     terrain = env.scene.terrain
-    types = terrain.terrain_types.float()            # (num_envs,)
-    return types.unsqueeze(-1)  
+    types = torch.as_tensor(terrain.terrain_types, device=env.device, dtype=torch.float32)
+    return types.unsqueeze(-1)

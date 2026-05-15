@@ -52,6 +52,8 @@ class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
         self.observations.policy.joint_pos.scale = 1.0
         self.observations.policy.joint_vel.scale = 0.05
 
+        self.observations.noise_policy.base_lin_vel = None
+        self.observations.noise_policy.height_scan = None
         ##此处含义是不将这些作为policy的观测输入
 
         self.observations.policy.joint_pos.params["asset_cfg"].joint_names = self.joint_names

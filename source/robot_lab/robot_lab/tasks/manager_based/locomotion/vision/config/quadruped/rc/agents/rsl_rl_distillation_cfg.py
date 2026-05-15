@@ -4,14 +4,14 @@
 from __future__ import annotations
 
 from dataclasses import MISSING
-from omni.isaac.lab.utils import configclass
-from omni.isaac.lab_tasks.utils.wrappers.rsl_rl import (
+from isaaclab.utils import configclass
+from isaaclab_rl.rsl_rl import (
     RslRlDistillationRunnerCfg,
     RslRlDistillationAlgorithmCfg,
     RslRlMLPModelCfg,
 )
 #直接导入
-from student_cnn_policy import StudentCNNPolicy
+from .student_cnn_policy import StudentCNNPolicy
 
 
 # ========================================
@@ -28,7 +28,7 @@ class StudentCNNPolicyCfg:
     """
     
     # ========== 模型类名 ==========
-    #class_name: str = "StudentCNNPolicy"
+    class_name: str = "robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy"
     class_func: type = StudentCNNPolicy  # 直接使用类对象，避免字符串解析错误
     
     # ========== 观测维度配置 ==========
@@ -70,17 +70,18 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     """
     
     # ========== 实验名称 ==========
-    experiment_name: str = "rc_student_distillation"
+    experiment_name: str = "rc_rough_teacher"
     run_name: str = "student_cnn_policy"
     
     # ========== 观测组配置 ==========
     obs_groups: dict[str, list[str]] = {
-        "student": ["noise_policy", "depth_image"],  # 学生只看本体感知 + 深度图
+        #"student": ["noise_policy", "depth_image"],  # 学生只看本体感知 + 深度图
+        "student": ["noise_policy"],
         "teacher": ["policy"],   # 教师额外看特权信息
     }
     
     # ========== 教师网络配置（标准 MLP）==========
-    teacher: RslRlMLPModelCfg = RslRlMLPModelCfg(
+    teacher = RslRlMLPModelCfg(
         class_name="MLPModel",
         hidden_dims=[512, 256, 128],
         activation="elu",
@@ -91,8 +92,9 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     )
     
     # ========== 学生网络配置（自定义 CNN+MLP）==========
-    student: StudentCNNPolicyCfg = StudentCNNPolicyCfg(
-        class_func=StudentCNNPolicy,
+    student = StudentCNNPolicyCfg(
+        # class_func=StudentCNNPolicy,
+        class_name="robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy",
         
         # CNN 配置
         output_channels=[16, 32, 32],
@@ -109,6 +111,8 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
         
         # 本体感知维度
         proprioception_dim=93,
+        depth_height = 48,
+        depth_width = 64,
         
         # 策略 MLP 配置
         MLP_hidden_dims=[512, 256, 128],
@@ -126,7 +130,7 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     algorithm: RslRlDistillationAlgorithmCfg = RslRlDistillationAlgorithmCfg(
         class_name="Distillation",
         num_learning_epochs=5,
-        num_mini_batches=4,
+        #num_mini_batches=4,
         learning_rate=1.0e-3,
         max_grad_norm=1.0,
         gradient_length=2,

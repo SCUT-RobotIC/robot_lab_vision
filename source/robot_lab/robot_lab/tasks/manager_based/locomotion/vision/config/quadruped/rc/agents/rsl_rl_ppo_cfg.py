@@ -1,6 +1,6 @@
 # Copyright (c) 2024-2025 Ziqi Fan
 # SPDX-License-Identifier: Apache-2.0
-
+from __future__ import annotations
 from isaaclab.utils import configclass
 
 from isaaclab_rl.rsl_rl import (
@@ -11,10 +11,11 @@ from isaaclab_rl.rsl_rl import (
     RslRlSymmetryCfg,
 )
 
-from __future__ import annotations
+
 
 from dataclasses import MISSING
 
+@configclass
 class RCTeacherPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 15000

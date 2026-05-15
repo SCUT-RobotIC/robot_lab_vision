@@ -26,45 +26,42 @@ class StudentCNNPolicy(nn.Module):
     
     def __init__(
         self,
-        num_obs: int,
+        obs,                 # rsl_rl 传入的 obs 描述（不是 int）
+        obs_groups,          # dict: {"student":[...], "teacher":[...]}
+        obs_group_name: str, # "student"
         num_actions: int,
-        # 观测维度配置
         proprioception_dim: int = 93,
         depth_height: int = 48,
         depth_width: int = 64,
-        # CNN 配置
-        output_channels: list[int] = None,
-        kernel_size: list[int] = None,
-        stride: list[int] = None,
+        output_channels: list[int] | None = None,
+        kernel_size: list[int] | None = None,
+        stride: list[int] | None = None,
         padding: str = "zeros",
         activation: str = "LeakyReLU",
         max_pool: bool = True,
         global_pool: str = "none",
         flatten: bool = True,
-        # CNN 后的 MLP
-        flat_mlp: list[int] = None,
-        # 策略 MLP 配置
-        MLP_hidden_dims: list[int] = None,
+        flat_mlp: list[int] | None = None,
+        MLP_hidden_dims: list[int] | None = None,
         MLP_activation: str = "elu",
-        # 分布配置
-        distribution_cfg: Dict[str, Any] = None,
-        **kwargs
+        distribution_cfg=None,
+        **kwargs,
     ):
         super().__init__()
-        
-        # ========== 1. 观测维度解析 ==========
+
+        # 关键：从 obs 里拿到这个 group 的观测维度
+        # 不同版本 rsl_rl 的 obs 结构不一样，这里做个兼容写法：
+        num_obs = self._infer_num_obs(obs, obs_groups, obs_group_name)
+
         self.proprioception_dim = proprioception_dim
         self.depth_height = depth_height
         self.depth_width = depth_width
-        self.depth_dim = depth_height * depth_width  # 48 * 64 = 3072
+        self.depth_dim = depth_height * depth_width
         self.num_actions = num_actions
-        
-        # 验证观测维度
+
         expected_obs_dim = proprioception_dim + self.depth_dim
         assert num_obs == expected_obs_dim, (
-            f"❌ Observation dimension mismatch! "
-            f"Expected {expected_obs_dim} (proprio={proprioception_dim} + depth={self.depth_dim}), "
-            f"but got {num_obs}"
+            f"Observation dimension mismatch! Expected {expected_obs_dim}, got {num_obs}."
         )
         
         # ========== 2. 构建 CNN 编码器 ==========
@@ -140,7 +137,30 @@ class StudentCNNPolicy(nn.Module):
         # print(f"   - Output: {num_actions} actions")
         # print(f"\n📉 Distribution: Gaussian (init_std={init_std:.2f})")
         # print("="*80 + "\n")
-    
+    def _infer_num_obs(self, obs, obs_groups, obs_group_name: str) -> int:
+        # 下面给几个常见情况的兜底，你根据你实际 obs 结构选一个成立的
+        # 1) 如果 obs 直接就是 int
+        if isinstance(obs, int):
+            return obs
+
+        # 2) 如果 obs 是 dict，里面按 group_name 存维度
+        if isinstance(obs, dict):
+            if obs_group_name in obs and isinstance(obs[obs_group_name], int):
+                return obs[obs_group_name]
+            if obs_group_name in obs and hasattr(obs[obs_group_name], "__len__"):
+                return len(obs[obs_group_name])
+
+        # 3) 如果 obs 有 num_obs 或 shape 等属性（常见是 tensor-like spec）
+        if hasattr(obs, "shape"):
+            # 例如 shape = (num_obs,)
+            try:
+                return int(obs.shape[-1])
+            except Exception:
+                pass
+        if hasattr(obs, "num_obs"):
+            return int(obs.num_obs)
+
+        raise RuntimeError(f"Cannot infer num_obs from obs={type(obs)} for group={obs_group_name}")
     def _build_cnn_encoder(
         self,
         output_channels: list[int],

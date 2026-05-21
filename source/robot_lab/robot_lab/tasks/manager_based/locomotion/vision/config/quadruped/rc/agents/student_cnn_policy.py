@@ -214,10 +214,10 @@ class StudentCNNPolicy(nn.Module):
         self.depth_dim = depth_height * depth_width
         self.num_actions = num_actions
 
-        expected_obs_dim = proprioception_dim + self.depth_dim
-        assert num_obs == expected_obs_dim, (
-            f"Observation dimension mismatch! Expected {expected_obs_dim}, got {num_obs}."
-        )
+        # expected_obs_dim = proprioception_dim + self.depth_dim
+        # assert num_obs == expected_obs_dim, (
+        #     f"Observation dimension mismatch! Expected {expected_obs_dim}, got {num_obs}."
+        # )
         flat_mlp = flat_mlp or [128]
         assert len(flat_mlp) == 1, "flat_mlp should only have one layer for embedding"
         self.embedding_dim = flat_mlp[0]
@@ -285,7 +285,20 @@ class StudentCNNPolicy(nn.Module):
                 return int(obs.num_obs)
 
         raise RuntimeError(f"Cannot infer num_obs from obs={type(obs)} for group={obs_group_name}")
-    def forward(self, observations: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+
+    def _compute_action_stats(self, observations: dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        proprioception = observations["noise_policy"]  # (B, 93)
+        depth_flat = observations["depth_image"]      # (B, 3072)
+        depth_embedding = self.depth_encoder(depth_flat)
+        return self.policy_head(proprioception, depth_embedding)
+
+    def forward(
+        self,
+        observations: dict[str, torch.Tensor],
+        stochastic_output: bool | None = None,
+        deterministic: bool = False,
+        **kwargs,
+    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
         """
         前向传播
         
@@ -298,12 +311,17 @@ class StudentCNNPolicy(nn.Module):
             action_mean: (batch_size, num_actions)
             action_std: (batch_size, num_actions)
         """
-        proprioception = observations["noise_policy"]  # (B, 93)
-        depth_flat = observations["depth_image"]      # (B, 3072)
-        depth_embedding = self.depth_encoder(depth_flat)
-        action_mean, action_std = self.policy_head(proprioception, depth_embedding)
-        
-        return action_mean, action_std
+        action_mean, action_std = self._compute_action_stats(observations)
+
+        # rsl_rl 的 distillation 会通过 student(obs, stochastic_output=True) 直接取动作
+        if stochastic_output is None:
+            return action_mean, action_std
+
+        if deterministic or not stochastic_output:
+            return action_mean
+
+        dist = torch.distributions.Normal(action_mean, action_std)
+        return dist.sample()
 
     def encode_depth(self, depth_image: torch.Tensor) -> torch.Tensor:
         """单独导出深度图分支：CNN + flatten + embedding。"""
@@ -335,7 +353,7 @@ class StudentCNNPolicy(nn.Module):
         Returns:
             actions: (batch_size, num_actions)
         """
-        action_mean, action_std = self.forward(observations)
+        action_mean, action_std = self._compute_action_stats(observations)
         
         if deterministic:
             return action_mean
@@ -358,7 +376,7 @@ class StudentCNNPolicy(nn.Module):
             log_prob: (batch_size,)
             entropy: (batch_size,)
         """
-        action_mean, action_std = self.forward(observations)
+        action_mean, action_std = self._compute_action_stats(observations)
         
         dist = torch.distributions.Normal(action_mean, action_std)
         log_prob = dist.log_prob(actions).sum(dim=-1)

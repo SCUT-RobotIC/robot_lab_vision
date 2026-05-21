@@ -32,7 +32,6 @@ class StudentCNNPolicyCfg:
     class_func: type = StudentCNNPolicy  # 直接使用类对象，避免字符串解析错误
     
     # ========== 观测维度配置 ==========
-    obs_group_name: str = "student"  # 对应 StudentCNNPolicy 里的 obs_group_name
     proprioception_dim: int = 93  # 本体感知维度（可配置）
     depth_height: int = 48
     depth_width: int = 64
@@ -43,7 +42,7 @@ class StudentCNNPolicyCfg:
     stride: list[int] = MISSING           # [2, 2, 1]
     padding: str = "zeros"                # "zeros" or "same"
     activation: str = "LeakyReLU"         # CNN 激活函数
-    max_pool: bool = True                 # 是否使用 MaxPool
+    max_pool: bool = False                 # 是否使用 MaxPool
     global_pool: str = "none"             # "none", "avg", "max"
     flatten: bool = True                  # CNN 输出是否 flatten
     
@@ -86,7 +85,7 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
         class_name="MLPModel",
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=True,
+        obs_normalization=False,
         distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(
             init_std=1.0,
         ),
@@ -96,7 +95,6 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     student = StudentCNNPolicyCfg(
         # class_func=StudentCNNPolicy,
         class_name="robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy",
-        obs_group_name="student",
         
         # CNN 配置
         output_channels=[16, 32, 32],
@@ -104,7 +102,7 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
         stride=[2, 2, 1],
         padding="zeros",
         activation="LeakyReLU",
-        max_pool=True,
+        max_pool=False,
         global_pool="none",
         flatten=True,
         

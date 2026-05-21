@@ -76,7 +76,6 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     # ========== 观测组配置 ==========
     obs_groups: dict[str, list[str]] = {
         "student": ["noise_policy", "depth_image"],  # 学生：本体感知 + 深度图
-        "policy": ["noise_policy", "depth_image"],   # 兼容只认 policy 的 runner 实现
         "teacher": ["policy"],   # 教师额外看特权信息
     }
     
@@ -85,7 +84,7 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
         class_name="MLPModel",
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(
             init_std=1.0,
         ),
@@ -128,8 +127,7 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
         #obs normalization的范围？,是否需要对embedding对象进行归一化？
     )
 
-    # 兼容不同 distillation runner 对学生侧字段命名的实现
-    policy = student
+
     
     # ========== 蒸馏算法配置 ==========
     algorithm: RslRlDistillationAlgorithmCfg = RslRlDistillationAlgorithmCfg(

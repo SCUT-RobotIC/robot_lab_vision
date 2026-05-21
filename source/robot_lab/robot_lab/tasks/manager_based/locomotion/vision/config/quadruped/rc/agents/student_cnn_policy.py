@@ -204,23 +204,18 @@ class StudentCNNPolicy(nn.Module):
     ):
         super().__init__()
 
-        # 关键：从 obs 里拿到这个 group 的观测维度
-        # 不同版本 rsl_rl 的 obs 结构不一样，这里做个兼容写法：
-        num_obs = self._infer_num_obs(obs, obs_groups, obs_group_name)
-
-        self.proprioception_dim = proprioception_dim
         self.depth_height = depth_height
         self.depth_width = depth_width
         self.depth_dim = depth_height * depth_width
         self.num_actions = num_actions
+        self._policy_head_built = False
+        self.obs_normalization = obs_normalization
 
-        # expected_obs_dim = proprioception_dim + self.depth_dim
-        # assert num_obs == expected_obs_dim, (
-        #     f"Observation dimension mismatch! Expected {expected_obs_dim}, got {num_obs}."
-        # )
         flat_mlp = flat_mlp or [128]
         assert len(flat_mlp) == 1, "flat_mlp should only have one layer for embedding"
         self.embedding_dim = flat_mlp[0]
+        self._policy_hidden_dims = MLP_hidden_dims or [512, 256, 128]
+        self._policy_activation = MLP_activation
 
         if distribution_cfg is None:
             distribution_cfg = {"init_std": 1.0}
@@ -243,54 +238,50 @@ class StudentCNNPolicy(nn.Module):
             mlp_activation=MLP_activation,
         )
 
-        # ========== 3. 策略分支（proprioception + embedding -> action）==========
-        self.policy_head = PolicyHead(
-            proprioception_dim=proprioception_dim,
-            embedding_dim=self.embedding_dim,
-            num_actions=num_actions,
-            hidden_dims=MLP_hidden_dims or [512, 256, 128],
-            activation=MLP_activation,
-            init_std=init_std,
-            obs_normalization=obs_normalization,
-        )
+        self._init_std = init_std
 
-        # 保持旧属性名兼容训练/加载代码
+        # 保持旧属性名兼容训练/加载代码，先提供占位引用，真正的 policy_head 在首次 forward 时按输入 shape 构建
         self.cnn_encoder = self.depth_encoder.cnn_encoder
         self.depth_embedding_mlp = self.depth_encoder.depth_embedding_mlp
+        self.policy_head = None
+        self.policy_net = None
+        self.log_std = None
+
+    def _build_policy_head(self, proprioception_dim: int, embedding_dim: int, device: torch.device) -> None:
+        self.policy_head = PolicyHead(
+            proprioception_dim=proprioception_dim,
+            embedding_dim=embedding_dim,
+            num_actions=self.num_actions,
+            hidden_dims=self._policy_hidden_dims,
+            activation=self._policy_activation,
+            init_std=self._init_std,
+            obs_normalization=self.obs_normalization,
+        ).to(device)
         self.policy_net = self.policy_head.policy_net
         self.log_std = self.policy_head.log_std
+        self._policy_head_built = True
 
-    def _infer_num_obs(self, obs, obs_groups, obs_group_name: str) -> int:
-        # 下面给几个常见情况的兜底，你根据你实际 obs 结构选一个成立的
-        # 1) 如果 obs 直接就是 int
-        if isinstance(obs, int):
-            return obs
-
-        # 2) 如果 obs 是 dict，里面按 group_name 存维度
-        if isinstance(obs, dict):
-            if obs_group_name in obs and isinstance(obs[obs_group_name], int):
-                return obs[obs_group_name]
-            if obs_group_name in obs and hasattr(obs[obs_group_name], "__len__"):
-                return len(obs[obs_group_name])
-
-        # 3) 如果 obs 有 num_obs 或 shape 等属性（常见是 tensor-like spec）
-        if not isinstance(obs, dict):
-            if hasattr(obs, "shape"):
-                # 例如 shape = (num_obs,)
-                try:
-                    return int(obs.shape[-1])
-                except Exception:
-                    pass
-            if hasattr(obs, "num_obs"):
-                return int(obs.num_obs)
-
-        raise RuntimeError(f"Cannot infer num_obs from obs={type(obs)} for group={obs_group_name}")
+    def _ensure_policy_head(self, proprioception_dim: int, embedding_dim: int, device: torch.device) -> PolicyHead:
+        if not self._policy_head_built or self.policy_head is None:
+            self._build_policy_head(proprioception_dim, embedding_dim, device)
+        assert self.policy_head is not None
+        return self.policy_head
 
     def _compute_action_stats(self, observations: dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
-        proprioception = observations["noise_policy"]  # (B, 93)
-        depth_flat = observations["depth_image"]      # (B, 3072)
-        depth_embedding = self.depth_encoder(depth_flat)
-        return self.policy_head(proprioception, depth_embedding)
+        with torch.inference_mode(False):
+            proprioception = observations["noise_policy"].detach().clone()
+            depth_flat = observations["depth_image"].detach().clone()
+
+            if not self._policy_head_built:
+                proprioception_dim = int(proprioception.shape[-1])
+                depth_embedding = self.depth_encoder(depth_flat)
+                embedding_dim = int(depth_embedding.shape[-1])
+                policy_head = self._ensure_policy_head(proprioception_dim, embedding_dim, proprioception.device)
+                return policy_head(proprioception, depth_embedding)
+
+            depth_embedding = self.depth_encoder(depth_flat)
+            assert self.policy_head is not None
+            return self.policy_head(proprioception, depth_embedding)
 
     def forward(
         self,
@@ -302,20 +293,18 @@ class StudentCNNPolicy(nn.Module):
         """
         前向传播
         
-        Args:
+        Args:ßß
             observations: (batch_size, num_obs)
-                - [:, :proprioception_dim]: 本体感知
-                - [:, proprioception_dim:]: 深度图 flatten
-        
+
         Returns:
             action_mean: (batch_size, num_actions)
             action_std: (batch_size, num_actions)
         """
         action_mean, action_std = self._compute_action_stats(observations)
 
-        # rsl_rl 的 distillation 会通过 student(obs, stochastic_output=True) 直接取动作
+        # rsl_rl 的 distillation 在 update() 里会直接调用 student(obs)，这里默认返回动作张量
         if stochastic_output is None:
-            return action_mean, action_std
+            return action_mean
 
         if deterministic or not stochastic_output:
             return action_mean
@@ -334,13 +323,37 @@ class StudentCNNPolicy(nn.Module):
         deterministic: bool = False,
     ) -> torch.Tensor:
         """单独导出策略分支：输入 proprioception 和 embedding，输出动作。"""
-        action_mean, action_std = self.policy_head(proprioception, depth_embedding)
+        policy_head = self._ensure_policy_head(
+            int(proprioception.shape[-1]),
+            int(depth_embedding.shape[-1]),
+            proprioception.device,
+        )
+        action_mean, action_std = policy_head(proprioception, depth_embedding)
 
         if deterministic:
             return action_mean
 
         dist = torch.distributions.Normal(action_mean, action_std)
         return dist.sample()
+
+    def update_normalization(self, observations: dict[str, torch.Tensor]) -> None:
+        """兼容 rsl_rl 蒸馏流程的归一化更新接口。"""
+        return None
+
+    def detach_hidden_state(self, *args, **kwargs) -> None:
+        """兼容 rsl_rl 蒸馏流程的 hidden state 接口；当前策略是前馈网络，因此无需处理。"""
+        return None
+
+    def get_hidden_state(self):
+        """兼容 rsl_rl 蒸馏流程的 hidden state 读取接口；当前策略没有隐藏状态。"""
+        return None
+
+    @property
+    def output_std(self):
+        """兼容 rsl_rl 读取动作标准差的接口。"""
+        if self.policy_head is None:
+            return None
+        return torch.exp(self.policy_head.log_std)
     
     def act(self, observations: torch.Tensor, deterministic: bool = False) -> torch.Tensor:
         """
@@ -384,6 +397,11 @@ class StudentCNNPolicy(nn.Module):
         
         return log_prob, entropy
     
-    def reset(self, env_ids: torch.Tensor = None):
-        """重置网络状态（如果有 RNN 等需要）"""
+    def reset(
+        self,
+        env_ids: torch.Tensor = None,
+        hidden_state: torch.Tensor | None = None,
+        **kwargs,
+    ):
+        """重置网络状态（兼容 rsl_rl 蒸馏接口）。"""
         pass

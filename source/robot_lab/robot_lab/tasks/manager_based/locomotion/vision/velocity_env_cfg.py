@@ -24,6 +24,8 @@ from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
+
+from isaaclab.sensors import TiledCameraCfg, ContactSensorCfg, RayCasterCfg, patterns, RayCasterCameraCfg
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import robot_lab.tasks.manager_based.locomotion.vision.mdp as mdp
@@ -52,8 +54,8 @@ class MySceneCfg(InteractiveSceneCfg):
         max_init_terrain_level=0,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            # friction_combine_mode="multiply",
-            # restitution_combine_mode="multiply",
+            friction_combine_mode="average",
+            restitution_combine_mode="average",
             static_friction=0.3,
             dynamic_friction=0.3,
             restitution=0.2,
@@ -94,7 +96,29 @@ class MySceneCfg(InteractiveSceneCfg):
         ),
     )
 
-
+    depth_camera = RayCasterCameraCfg(
+        offset = RayCasterCameraCfg.OffsetCfg(
+            #待确认
+            
+            pos = (0.1, 0.0, 0.2),
+            rot=(0.7071, 0.0, 0.7071, 0.0),
+            convention="ros"
+        ),
+        prim_path = "{ENV_REGEX_NS}/Robot/base",
+        update_period = 0.1, #update image at 10Hz，重要！！！
+        debug_vis = True,
+        mesh_prim_paths = ["/World/ground"],
+        ray_alignment = "yaw",
+        max_distance = 3.0,
+        depth_clipping_behavior = "max",#Values are clipped to the maximum value；论文中有使用
+        ##clip的尺度？，做了什么？
+        
+        pattern_cfg = patterns.PinholeCameraPatternCfg(
+            width = 64,
+            height = 48,
+        )
+    )
+         
 ##
 # MDP settings
 ##
@@ -329,9 +353,26 @@ class ObservationsCfg:
             self.enable_corruption = True
             self.concatenate_terms = True
 
+
+    @configclass
+    class DepthImageCfg(ObsGroup):
+        """Depth camera image for student"""
+        depth_image = ObsTerm(
+            func = mdp.pre_pocessing_depths,
+            params = {
+                "normalize": True,
+            }
+        )
+
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
+    
     # observation groups
     policy: PolicyCfg = PolicyCfg()
     noise_policy: NoisePolicyCfg = NoisePolicyCfg()
+    depth: DepthImageCfg = DepthImageCfg()
     #depth_images
 
 
@@ -347,8 +388,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.4, 1.2),#0.12-0.36
-            "dynamic_friction_range": (0.3, 0.9),
+            "static_friction_range": (0.2, 0.7),#与0.3进行average  #（0.25-0.75）
+            "dynamic_friction_range": (0.2, 0.7),
             "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
             #将连续范围离散为64个等级",

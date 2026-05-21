@@ -32,6 +32,7 @@ class StudentCNNPolicyCfg:
     class_func: type = StudentCNNPolicy  # 直接使用类对象，避免字符串解析错误
     
     # ========== 观测维度配置 ==========
+    obs_group_name: str = "student"  # 对应 StudentCNNPolicy 里的 obs_group_name
     proprioception_dim: int = 93  # 本体感知维度（可配置）
     depth_height: int = 48
     depth_width: int = 64
@@ -75,8 +76,8 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     
     # ========== 观测组配置 ==========
     obs_groups: dict[str, list[str]] = {
-        #"student": ["noise_policy", "depth_image"],  # 学生只看本体感知 + 深度图
-        "student": ["noise_policy"],
+        "student": ["noise_policy", "depth_image"],  # 学生：本体感知 + 深度图
+        "policy": ["noise_policy", "depth_image"],   # 兼容只认 policy 的 runner 实现
         "teacher": ["policy"],   # 教师额外看特权信息
     }
     
@@ -95,6 +96,7 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     student = StudentCNNPolicyCfg(
         # class_func=StudentCNNPolicy,
         class_name="robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy",
+        obs_group_name="student",
         
         # CNN 配置
         output_channels=[16, 32, 32],
@@ -124,7 +126,12 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
         ),
         
         obs_normalization=False,
+
+        #obs normalization的范围？,是否需要对embedding对象进行归一化？
     )
+
+    # 兼容不同 distillation runner 对学生侧字段命名的实现
+    policy = student
     
     # ========== 蒸馏算法配置 ==========
     algorithm: RslRlDistillationAlgorithmCfg = RslRlDistillationAlgorithmCfg(

@@ -125,8 +125,13 @@ class PolicyHead(nn.Module):
         hidden_dims: list[int],
         activation: str,
         init_std: float,
+        obs_normalization: bool = False,
     ):
         super().__init__()
+
+        self.obs_normalization = obs_normalization
+        self.proprioception_norm = nn.LayerNorm(proprioception_dim) if obs_normalization else nn.Identity()
+        self.depth_embedding_norm = nn.LayerNorm(embedding_dim) if obs_normalization else nn.Identity()
 
         policy_input_dim = proprioception_dim + embedding_dim
         policy_layers = []
@@ -148,6 +153,8 @@ class PolicyHead(nn.Module):
         proprioception: torch.Tensor,
         depth_embedding: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        proprioception = self.proprioception_norm(proprioception)
+        depth_embedding = self.depth_embedding_norm(depth_embedding)
         combined_features = torch.cat([proprioception, depth_embedding], dim=-1)
         action_mean = self.policy_net(combined_features)
         action_std = torch.exp(self.log_std).expand_as(action_mean)
@@ -191,6 +198,7 @@ class StudentCNNPolicy(nn.Module):
         flat_mlp: list[int] | None = None,
         MLP_hidden_dims: list[int] | None = None,
         MLP_activation: str = "elu",
+        obs_normalization: bool = False,
         distribution_cfg=None,
         **kwargs,
     ):
@@ -243,6 +251,7 @@ class StudentCNNPolicy(nn.Module):
             hidden_dims=MLP_hidden_dims or [512, 256, 128],
             activation=MLP_activation,
             init_std=init_std,
+            obs_normalization=obs_normalization,
         )
 
         # 保持旧属性名兼容训练/加载代码

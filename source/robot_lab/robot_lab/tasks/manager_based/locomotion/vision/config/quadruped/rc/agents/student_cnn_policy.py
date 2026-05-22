@@ -1,24 +1,17 @@
-# Copyright (c) 2024, Your Name
-# SPDX-License-Identifier: MIT
-
-"""
-Student CNN Policy Network for Distillation
-
-架构：
-    1. Depth Image (1, 48, 64) → CNN Encoder → Flatten
-    2. CNN Flatten → Single Layer MLP → Depth Embedding (128)
-    3. Proprioception (93) + Depth Embedding (128) → Policy MLP → Action
-"""
-
 from __future__ import annotations
 
+import copy
 import torch
 import torch.nn as nn
-from typing import Any, Dict, Tuple
+from tensordict import TensorDict
+
+from rsl_rl.modules import MLP, EmpiricalNormalization, HiddenState
+from rsl_rl.modules.distribution import Distribution
+from rsl_rl.utils import resolve_callable, unpad_trajectories
 
 
 class DepthEncoder(nn.Module):
-    """CNN + flatten + embedding，用于单独部署深度图分支。"""
+    """CNN + flatten + projection MLP for depth-image encoding."""
 
     def __init__(
         self,
@@ -27,19 +20,30 @@ class DepthEncoder(nn.Module):
         output_channels: list[int],
         kernel_size: list[int],
         stride: list[int],
-        padding: str,
-        activation: str,
-        max_pool: bool,
-        global_pool: str,
-        flatten: bool,
-        embedding_dim: int,
-        mlp_activation: str,
-    ):
+        padding: str = "same",
+        activation: str = "leakyrelu",
+        max_pool: bool = True,
+        global_pool: str = "none",
+        flatten: bool = True,
+        embedding_dim: int = 128,
+        mlp_activation: str = "elu",
+        in_channels: int = 1,
+    ) -> None:
         super().__init__()
+
+        if not (len(output_channels) == len(kernel_size) == len(stride)):
+            raise ValueError(
+                "output_channels, kernel_size, and stride must have the same length, "
+                f"got {len(output_channels)}, {len(kernel_size)}, {len(stride)}."
+            )
+
         self.depth_height = depth_height
         self.depth_width = depth_width
+        self.in_channels = in_channels
+        self.embedding_dim = embedding_dim
 
         self.cnn_encoder = self._build_cnn_encoder(
+            in_channels=in_channels,
             output_channels=output_channels,
             kernel_size=kernel_size,
             stride=stride,
@@ -51,20 +55,66 @@ class DepthEncoder(nn.Module):
         )
 
         with torch.no_grad():
-            dummy_depth = torch.zeros(1, 1, depth_height, depth_width)
-            cnn_output_dim = self.cnn_encoder(dummy_depth).shape[1]
+            dummy_depth = torch.zeros(1, in_channels, depth_height, depth_width)
+            cnn_output = self.cnn_encoder(dummy_depth)
+            if cnn_output.dim() != 2:
+                raise RuntimeError(
+                    f"Depth CNN encoder output must be 2D after flattening, got shape {cnn_output.shape}."
+                )
+            cnn_output_dim = cnn_output.shape[-1]
 
+        self.output_dim = embedding_dim
         self.depth_embedding_mlp = nn.Sequential(
             nn.Linear(cnn_output_dim, embedding_dim),
             self._get_activation(mlp_activation),
         )
 
     def forward(self, depth_image: torch.Tensor) -> torch.Tensor:
+        depth_image = self._format_depth_input(depth_image)
         cnn_features = self.cnn_encoder(depth_image)
         return self.depth_embedding_mlp(cnn_features)
 
+    def _format_depth_input(self, depth_image: torch.Tensor) -> torch.Tensor:
+        """Convert input depth tensor to shape [B, C, H, W]."""
+        if depth_image.dim() == 2:
+            # [B, H*W]
+            expected = self.depth_height * self.depth_width
+            if depth_image.shape[-1] != expected:
+                raise ValueError(
+                    f"2D depth input must have shape [B, {expected}], got {depth_image.shape}."
+                )
+            depth_image = depth_image.view(-1, self.in_channels, self.depth_height, self.depth_width)
+
+        elif depth_image.dim() == 3:
+            # [B, H, W]
+            if depth_image.shape[-2:] != (self.depth_height, self.depth_width):
+                raise ValueError(
+                    f"3D depth input must have spatial shape ({self.depth_height}, {self.depth_width}), "
+                    f"got {depth_image.shape}."
+                )
+            depth_image = depth_image.unsqueeze(1)
+
+        elif depth_image.dim() == 4:
+            # [B, C, H, W]
+            if depth_image.shape[1] != self.in_channels:
+                raise ValueError(
+                    f"Depth input channel mismatch: expected {self.in_channels}, got {depth_image.shape[1]}."
+                )
+            if depth_image.shape[-2:] != (self.depth_height, self.depth_width):
+                raise ValueError(
+                    f"4D depth input must have spatial shape ({self.depth_height}, {self.depth_width}), "
+                    f"got {depth_image.shape}."
+                )
+        else:
+            raise ValueError(
+                f"Depth input must be 2D, 3D, or 4D, got tensor with shape {depth_image.shape}."
+            )
+
+        return depth_image
+
     def _build_cnn_encoder(
         self,
+        in_channels: int,
         output_channels: list[int],
         kernel_size: list[int],
         stride: list[int],
@@ -75,28 +125,40 @@ class DepthEncoder(nn.Module):
         flatten: bool,
     ) -> nn.Module:
         layers = []
-        in_channels = 1
+        current_in_channels = in_channels
 
         for out_ch, k_size, s in zip(output_channels, kernel_size, stride):
-            if padding == "same":
+            if padding.lower() == "same":
                 pad = k_size // 2
-            else:
+            elif padding.lower() in ("valid", "none"):
                 pad = 0
+            else:
+                raise ValueError(f"Unsupported padding mode: {padding}. Use 'same' or 'valid'.")
 
             layers.append(
-                nn.Conv2d(in_channels, out_ch, kernel_size=k_size, stride=s, padding=pad)
+                nn.Conv2d(
+                    current_in_channels,
+                    out_ch,
+                    kernel_size=k_size,
+                    stride=s,
+                    padding=pad,
+                )
             )
             layers.append(self._get_activation(activation))
 
             if max_pool:
                 layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
 
-            in_channels = out_ch
+            current_in_channels = out_ch
 
-        if global_pool == "avg":
+        if global_pool.lower() == "avg":
             layers.append(nn.AdaptiveAvgPool2d((1, 1)))
-        elif global_pool == "max":
+        elif global_pool.lower() == "max":
             layers.append(nn.AdaptiveMaxPool2d((1, 1)))
+        elif global_pool.lower() == "none":
+            pass
+        else:
+            raise ValueError(f"Unsupported global_pool mode: {global_pool}.")
 
         if flatten:
             layers.append(nn.Flatten())
@@ -110,55 +172,50 @@ class DepthEncoder(nn.Module):
             "leakyrelu": nn.LeakyReLU(negative_slope=0.01),
             "tanh": nn.Tanh(),
             "selu": nn.SELU(),
+            "gelu": nn.GELU(),
+            "silu": nn.SiLU(),
         }
-        return activations.get(name.lower(), nn.ReLU())
-
+        key = name.lower()
+        if key not in activations:
+            raise ValueError(f"Unsupported activation: {name}.")
+        return activations[key]
 
 class PolicyHead(nn.Module):
-    """本体感知 + 深度 embedding -> 动作输出，可单独部署。"""
+    """Policy MLP head operating on concatenated latent features."""
 
     def __init__(
         self,
-        proprioception_dim: int,
-        embedding_dim: int,
-        num_actions: int,
+        input_dim: int,
+        output_dim: int,
         hidden_dims: list[int],
-        activation: str,
-        init_std: float,
-        obs_normalization: bool = False,
-    ):
+        activation: str = "elu",
+    ) -> None:
         super().__init__()
 
-        self.obs_normalization = obs_normalization
-        self.proprioception_norm = nn.LayerNorm(proprioception_dim) if obs_normalization else nn.Identity()
-        self.depth_embedding_norm = nn.LayerNorm(embedding_dim) if obs_normalization else nn.Identity()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
 
-        policy_input_dim = proprioception_dim + embedding_dim
-        policy_layers = []
-        input_dim = policy_input_dim
+        layers = []
+        current_dim = input_dim
 
         for hidden_dim in hidden_dims:
-            policy_layers.extend([
-                nn.Linear(input_dim, hidden_dim),
-                self._get_activation(activation),
-            ])
-            input_dim = hidden_dim
+            layers.extend(
+                [
+                    nn.Linear(current_dim, hidden_dim),
+                    self._get_activation(activation),
+                ]
+            )
+            current_dim = hidden_dim
 
-        policy_layers.append(nn.Linear(input_dim, num_actions))
-        self.policy_net = nn.Sequential(*policy_layers)
-        self.log_std = nn.Parameter(torch.ones(num_actions) * torch.log(torch.tensor(init_std)))
+        layers.append(nn.Linear(current_dim, output_dim))
+        self.policy_net = nn.Sequential(*layers)
 
-    def forward(
-        self,
-        proprioception: torch.Tensor,
-        depth_embedding: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        proprioception = self.proprioception_norm(proprioception)
-        depth_embedding = self.depth_embedding_norm(depth_embedding)
-        combined_features = torch.cat([proprioception, depth_embedding], dim=-1)
-        action_mean = self.policy_net(combined_features)
-        action_std = torch.exp(self.log_std).expand_as(action_mean)
-        return action_mean, action_std
+    def forward(self, latent: torch.Tensor) -> torch.Tensor:
+        if latent.shape[-1] != self.input_dim:
+            raise ValueError(
+                f"PolicyHead expected latent dim {self.input_dim}, got {latent.shape[-1]}."
+            )
+        return self.policy_net(latent)
 
     def _get_activation(self, name: str) -> nn.Module:
         activations = {
@@ -167,241 +224,204 @@ class PolicyHead(nn.Module):
             "leakyrelu": nn.LeakyReLU(negative_slope=0.01),
             "tanh": nn.Tanh(),
             "selu": nn.SELU(),
+            "gelu": nn.GELU(),
+            "silu": nn.SiLU(),
         }
-        return activations.get(name.lower(), nn.ReLU())
-
+        key = name.lower()
+        if key not in activations:
+            raise ValueError(f"Unsupported activation: {name}.")
+        return activations[key]
 
 class StudentCNNPolicy(nn.Module):
+    """CNN-based student policy model for distillation.
+
+    Architecture:
+        depth_image -> DepthEncoder -> depth_embedding
+        noise_policy -> optional normalization
+        concat(noise_policy, depth_embedding) -> PolicyHead -> output/distribution
     """
-    学生 CNN 策略网络（用于蒸馏训练）
-    
-    只实现 Policy 网络（无 Critic，因为蒸馏不需要价值函数）
-    """
-    
+
+    is_recurrent: bool = False
+
     def __init__(
         self,
-        obs,                 # rsl_rl 传入的 obs 描述（不是 int）
-        obs_groups,          # dict: {"student":[...], "teacher":[...]}
-        obs_group_name: str, # "student"
-        num_actions: int,
-        proprioception_dim: int = 93,
-        depth_height: int = 48,
-        depth_width: int = 64,
-        output_channels: list[int] | None = None,
-        kernel_size: list[int] | None = None,
-        stride: list[int] | None = None,
-        padding: str = "zeros",
-        activation: str = "LeakyReLU",
-        max_pool: bool = True,
-        global_pool: str = "none",
-        flatten: bool = True,
-        flat_mlp: list[int] | None = None,
-        MLP_hidden_dims: list[int] | None = None,
-        MLP_activation: str = "elu",
+        obs: TensorDict,
+        obs_groups: dict[str, list[str]],
+        obs_set: str,
+        output_dim: int,
+        depth_encoder: DepthEncoder,
+        policy_head: PolicyHead,
+        proprio_group: str = "noise_policy",
+        depth_group: str = "depth_image",
         obs_normalization: bool = False,
-        distribution_cfg=None,
-        **kwargs,
-    ):
+        distribution_cfg: dict | None = None,
+    ) -> None:
         super().__init__()
 
-        self.depth_height = depth_height
-        self.depth_width = depth_width
-        self.depth_dim = depth_height * depth_width
-        self.num_actions = num_actions
-        self._policy_head_built = False
+        self.obs_groups = obs_groups[obs_set]
+        self.proprio_group = proprio_group
+        self.depth_group = depth_group
         self.obs_normalization = obs_normalization
 
-        flat_mlp = flat_mlp or [128]
-        assert len(flat_mlp) == 1, "flat_mlp should only have one layer for embedding"
-        self.embedding_dim = flat_mlp[0]
-        self._policy_hidden_dims = MLP_hidden_dims or [512, 256, 128]
-        self._policy_activation = MLP_activation
+        self.proprio_dim, self.depth_shape = self._get_obs_specs(obs)
 
-        if distribution_cfg is None:
-            distribution_cfg = {"init_std": 1.0}
+        self.depth_encoder = depth_encoder
+        self.policy_head = policy_head
 
-        init_std = distribution_cfg.get("init_std", 1.0)
+        if obs_normalization:
+            self.obs_normalizer = EmpiricalNormalization(self.proprio_dim)
+        else:
+            self.obs_normalizer = nn.Identity()
 
-        # ========== 2. 深度分支（CNN + flatten + embedding）==========
-        self.depth_encoder = DepthEncoder(
-            depth_height=depth_height,
-            depth_width=depth_width,
-            output_channels=output_channels or [16, 32, 32],
-            kernel_size=kernel_size or [5, 4, 3],
-            stride=stride or [2, 2, 1],
-            padding=padding,
-            activation=activation,
-            max_pool=max_pool,
-            global_pool=global_pool,
-            flatten=flatten,
-            embedding_dim=self.embedding_dim,
-            mlp_activation=MLP_activation,
-        )
+        if distribution_cfg is not None:
+            dist_cfg = copy.deepcopy(distribution_cfg)
+            dist_class: type[Distribution] = resolve_callable(dist_cfg.pop("class_name"))  # type: ignore
+            self.distribution: Distribution | None = dist_class(output_dim, **dist_cfg)
+            required_head_output_dim = self.distribution.input_dim
+        else:
+            self.distribution = None
+            required_head_output_dim = output_dim
 
-        self._init_std = init_std
+        if self.policy_head.output_dim != required_head_output_dim:
+            raise ValueError(
+                f"Policy head output_dim ({self.policy_head.output_dim}) must match "
+                f"required output dim ({required_head_output_dim})."
+            )
 
-        # 保持旧属性名兼容训练/加载代码，先提供占位引用，真正的 policy_head 在首次 forward 时按输入 shape 构建
-        self.cnn_encoder = self.depth_encoder.cnn_encoder
-        self.depth_embedding_mlp = self.depth_encoder.depth_embedding_mlp
-        self.policy_head = None
-        self.policy_net = None
-        self.log_std = None
-
-    def _build_policy_head(self, proprioception_dim: int, embedding_dim: int, device: torch.device) -> None:
-        self.policy_head = PolicyHead(
-            proprioception_dim=proprioception_dim,
-            embedding_dim=embedding_dim,
-            num_actions=self.num_actions,
-            hidden_dims=self._policy_hidden_dims,
-            activation=self._policy_activation,
-            init_std=self._init_std,
-            obs_normalization=self.obs_normalization,
-        ).to(device)
-        self.policy_net = self.policy_head.policy_net
-        self.log_std = self.policy_head.log_std
-        self._policy_head_built = True
-
-    def _ensure_policy_head(self, proprioception_dim: int, embedding_dim: int, device: torch.device) -> PolicyHead:
-        if not self._policy_head_built or self.policy_head is None:
-            self._build_policy_head(proprioception_dim, embedding_dim, device)
-        assert self.policy_head is not None
-        return self.policy_head
-
-    def _compute_action_stats(self, observations: dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
-        with torch.inference_mode(False):
-            proprioception = observations["noise_policy"].detach().clone()
-            depth_flat = observations["depth_image"].detach().clone()
-
-            if not self._policy_head_built:
-                proprioception_dim = int(proprioception.shape[-1])
-                depth_embedding = self.depth_encoder(depth_flat)
-                embedding_dim = int(depth_embedding.shape[-1])
-                policy_head = self._ensure_policy_head(proprioception_dim, embedding_dim, proprioception.device)
-                return policy_head(proprioception, depth_embedding)
-
-            depth_embedding = self.depth_encoder(depth_flat)
-            assert self.policy_head is not None
-            return self.policy_head(proprioception, depth_embedding)
+        if self.distribution is not None:
+            self.distribution.init_mlp_weights(self.policy_head.policy_net)
 
     def forward(
         self,
-        observations: dict[str, torch.Tensor],
-        stochastic_output: bool | None = None,
-        deterministic: bool = False,
-        **kwargs,
-    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
-        """
-        前向传播
-        
-        Args:ßß
-            observations: (batch_size, num_obs)
+        obs: TensorDict,
+        masks: torch.Tensor | None = None,
+        hidden_state: HiddenState = None,
+        stochastic_output: bool = False,
+    ) -> torch.Tensor:
+        obs = unpad_trajectories(obs, masks) if masks is not None and not self.is_recurrent else obs
+        latent = self.get_latent(obs, masks, hidden_state)
+        head_output = self.policy_head(latent)
 
-        Returns:
-            action_mean: (batch_size, num_actions)
-            action_std: (batch_size, num_actions)
-        """
-        action_mean, action_std = self._compute_action_stats(observations)
+        if self.distribution is not None:
+            if stochastic_output:
+                self.distribution.update(head_output)
+                return self.distribution.sample()
+            return self.distribution.deterministic_output(head_output)
 
-        # rsl_rl 的 distillation 在 update() 里会直接调用 student(obs)，这里默认返回动作张量
-        if stochastic_output is None:
-            return action_mean
+        return head_output
 
-        if deterministic or not stochastic_output:
-            return action_mean
+    def get_latent(
+        self,
+        obs: TensorDict,
+        masks: torch.Tensor | None = None,
+        hidden_state: HiddenState = None,
+    ) -> torch.Tensor:
+        proprio = obs[self.proprio_group]
+        depth = obs[self.depth_group]
 
-        dist = torch.distributions.Normal(action_mean, action_std)
-        return dist.sample()
+        if len(proprio.shape) != 2:
+            raise ValueError(
+                f"Expected proprio observation '{self.proprio_group}' to be 2D, got {proprio.shape}."
+            )
 
-    def encode_depth(self, depth_image: torch.Tensor) -> torch.Tensor:
-        """单独导出深度图分支：CNN + flatten + embedding。"""
-        return self.depth_encoder(depth_image)
+        proprio = self.obs_normalizer(proprio)
+        depth_embedding = self.depth_encoder(depth)
+        latent = torch.cat([proprio, depth_embedding], dim=-1)
+        return latent
+
+    def encode_depth(self, depth: torch.Tensor) -> torch.Tensor:
+        return self.depth_encoder(depth)
 
     def policy_from_features(
         self,
-        proprioception: torch.Tensor,
+        proprio: torch.Tensor,
         depth_embedding: torch.Tensor,
-        deterministic: bool = False,
+        stochastic_output: bool = False,
     ) -> torch.Tensor:
-        """单独导出策略分支：输入 proprioception 和 embedding，输出动作。"""
-        policy_head = self._ensure_policy_head(
-            int(proprioception.shape[-1]),
-            int(depth_embedding.shape[-1]),
-            proprioception.device,
-        )
-        action_mean, action_std = policy_head(proprioception, depth_embedding)
+        proprio = self.obs_normalizer(proprio)
+        latent = torch.cat([proprio, depth_embedding], dim=-1)
+        head_output = self.policy_head(latent)
 
-        if deterministic:
-            return action_mean
+        if self.distribution is not None:
+            if stochastic_output:
+                self.distribution.update(head_output)
+                return self.distribution.sample()
+            return self.distribution.deterministic_output(head_output)
 
-        dist = torch.distributions.Normal(action_mean, action_std)
-        return dist.sample()
+        return head_output
 
-    def update_normalization(self, observations: dict[str, torch.Tensor]) -> None:
-        """兼容 rsl_rl 蒸馏流程的归一化更新接口。"""
+    def reset(self, dones: torch.Tensor | None = None, hidden_state: HiddenState = None) -> None:
+        pass
+
+    def get_hidden_state(self) -> HiddenState:
         return None
 
-    def detach_hidden_state(self, *args, **kwargs) -> None:
-        """兼容 rsl_rl 蒸馏流程的 hidden state 接口；当前策略是前馈网络，因此无需处理。"""
-        return None
-
-    def get_hidden_state(self):
-        """兼容 rsl_rl 蒸馏流程的 hidden state 读取接口；当前策略没有隐藏状态。"""
-        return None
+    def detach_hidden_state(self, dones: torch.Tensor | None = None) -> None:
+        pass
 
     @property
-    def output_std(self):
-        """兼容 rsl_rl 读取动作标准差的接口。"""
-        if self.policy_head is None:
-            return None
-        return torch.exp(self.policy_head.log_std)
-    
-    def act(self, observations: torch.Tensor, deterministic: bool = False) -> torch.Tensor:
-        """
-        推理时使用的动作选择
-        
-        Args:
-            observations: (batch_size, num_obs)
-            deterministic: 是否使用确定性策略（取均值）
-        
-        Returns:
-            actions: (batch_size, num_actions)
-        """
-        action_mean, action_std = self._compute_action_stats(observations)
-        
-        if deterministic:
-            return action_mean
-        else:
-            # 从高斯分布采样
-            dist = torch.distributions.Normal(action_mean, action_std)
-            return dist.sample()
-    
-    def evaluate(
-        self, observations: torch.Tensor, actions: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        评估动作的对数概率（用于蒸馏训练）
-        
-        Args:
-            observations: (batch_size, num_obs)
-            actions: (batch_size, num_actions)
-        
-        Returns:
-            log_prob: (batch_size,)
-            entropy: (batch_size,)
-        """
-        action_mean, action_std = self._compute_action_stats(observations)
-        
-        dist = torch.distributions.Normal(action_mean, action_std)
-        log_prob = dist.log_prob(actions).sum(dim=-1)
-        entropy = dist.entropy().sum(dim=-1)
-        
-        return log_prob, entropy
-    
-    def reset(
+    def output_mean(self) -> torch.Tensor:
+        if self.distribution is None:
+            raise RuntimeError("output_mean is only available when a distribution is configured.")
+        return self.distribution.mean
+
+    @property
+    def output_std(self) -> torch.Tensor:
+        if self.distribution is None:
+            raise RuntimeError("output_std is only available when a distribution is configured.")
+        return self.distribution.std
+
+    @property
+    def output_entropy(self) -> torch.Tensor:
+        if self.distribution is None:
+            raise RuntimeError("output_entropy is only available when a distribution is configured.")
+        return self.distribution.entropy
+
+    @property
+    def output_distribution_params(self) -> tuple[torch.Tensor, ...]:
+        if self.distribution is None:
+            raise RuntimeError("output_distribution_params is only available when a distribution is configured.")
+        return self.distribution.params
+
+    def get_output_log_prob(self, outputs: torch.Tensor) -> torch.Tensor:
+        if self.distribution is None:
+            raise RuntimeError("get_output_log_prob is only available when a distribution is configured.")
+        return self.distribution.log_prob(outputs)
+
+    def get_kl_divergence(
         self,
-        env_ids: torch.Tensor = None,
-        hidden_state: torch.Tensor | None = None,
-        **kwargs,
-    ):
-        """重置网络状态（兼容 rsl_rl 蒸馏接口）。"""
-        pass
+        old_params: tuple[torch.Tensor, ...],
+        new_params: tuple[torch.Tensor, ...],
+    ) -> torch.Tensor:
+        if self.distribution is None:
+            raise RuntimeError("get_kl_divergence is only available when a distribution is configured.")
+        return self.distribution.kl_divergence(old_params, new_params)
+
+    def as_jit(self) -> nn.Module:
+        return _TorchStudentCNNPolicy(self)
+
+    def as_onnx(self, verbose: bool) -> nn.Module:
+        return _OnnxStudentCNNPolicy(self, verbose)
+
+    def update_normalization(self, obs: TensorDict) -> None:
+        if self.obs_normalization:
+            proprio = obs[self.proprio_group]
+            self.obs_normalizer.update(proprio)  # type: ignore
+
+    def _get_obs_specs(self, obs: TensorDict) -> tuple[int, tuple[int, ...]]:
+        proprio = obs[self.proprio_group]
+        depth = obs[self.depth_group]
+
+        if len(proprio.shape) != 2:
+            raise ValueError(
+                f"Expected proprio observation '{self.proprio_group}' to be 2D, got {proprio.shape}."
+            )
+
+        if depth.dim() not in (2, 3, 4):
+            raise ValueError(
+                f"Expected depth observation '{self.depth_group}' to be 2D/3D/4D, got {depth.shape}."
+            )
+
+        proprio_dim = proprio.shape[-1]
+        depth_shape = tuple(depth.shape[1:]) if depth.dim() > 1 else tuple(depth.shape)
+        return proprio_dim, depth_shape

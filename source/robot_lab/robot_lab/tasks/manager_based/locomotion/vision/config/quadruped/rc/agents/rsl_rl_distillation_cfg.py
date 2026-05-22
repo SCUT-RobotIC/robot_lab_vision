@@ -19,46 +19,25 @@ from .student_cnn_policy import StudentCNNPolicy
 # ========================================
 @configclass
 class StudentCNNPolicyCfg:
-    """
-    学生 CNN 策略网络配置
-    
-    架构：
-    1. Depth Image (48x64) → CNN → Flatten → MLP(128)
-    2. Proprioception (93) + Depth Embedding (128) → MLP → Action
-    """
-    
-    # ========== 模型类名 ==========
-    class_name: str = "robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy"
-    class_func: type = StudentCNNPolicy  # 直接使用类对象，避免字符串解析错误
-    
-    # ========== 观测维度配置 ==========
-    proprioception_dim: int = 93  # 本体感知维度（可配置）
-    depth_height: int = 48
-    depth_width: int = 64
-    
-    # ========== CNN 网络配置 ==========
-    output_channels: list[int] = MISSING  # [16, 32, 32]
-    kernel_size: list[int] = MISSING      # [5, 4, 3]
-    stride: list[int] = MISSING           # [2, 2, 1]
-    padding: str = "zeros"                # "zeros" or "same"
-    activation: str = "LeakyReLU"         # CNN 激活函数
-    max_pool: bool = False                 # 是否使用 MaxPool
-    global_pool: str = "none"             # "none", "avg", "max"
-    flatten: bool = True                  # CNN 输出是否 flatten
-    
-    # ========== CNN 后的 MLP（压缩到 embedding） ==========
-    flat_mlp: list[int] = MISSING         # [128] - CNN flatten 后的 MLP
-    
-    # ========== 策略 MLP 配置 ==========
-    MLP_hidden_dims: list[int] = MISSING  # [512, 256, 128]
-    MLP_activation: str = "elu"           # MLP 激活函数
-    
-    # ========== 输出分布配置 ==========
-    distribution_cfg: RslRlMLPModelCfg.GaussianDistributionCfg = MISSING
-    
-    # ========== 其他配置（与 RslRlMLPModelCfg 接口对齐）==========
-    obs_normalization: bool = False       # 是否归一化观测
+    """学生 CNN 策略网络配置。"""
 
+    # ========== 模型类 ==========
+    class_name: str = (
+        "robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy"
+    )
+    class_func: type = StudentCNNPolicy
+
+    # ========== 子模块配置 ==========
+    depth_encoder: dict = MISSING
+    policy_head: dict = MISSING
+
+    # ========== 观测组名 ==========
+    proprio_group: str = "noise_policy"
+    depth_group: str = "depth_image"
+
+    # ========== 其他配置 ==========
+    obs_normalization: bool = False
+    distribution_cfg: RslRlMLPModelCfg.GaussianDistributionCfg = MISSING
 
 # ========================================
 # Distillation Runner Configuration
@@ -92,41 +71,38 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     
     # ========== 学生网络配置（自定义 CNN+MLP）==========
     student = StudentCNNPolicyCfg(
-        # class_func=StudentCNNPolicy,
         class_name="robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy",
-        
-        # CNN 配置
-        output_channels=[16, 32, 32],
-        kernel_size=[5, 4, 3],
-        stride=[2, 2, 1],
-        padding="zeros",
-        activation="LeakyReLU",
-        max_pool=False,
-        global_pool="none",
-        flatten=True,
-        
-        # CNN 后的压缩 MLP
-        flat_mlp=[128],
-        
-        # 本体感知维度
-        proprioception_dim=93,
-        depth_height = 48,
-        depth_width = 64,
-        
-        # 策略 MLP 配置
-        MLP_hidden_dims=[512, 256, 128],
-        MLP_activation="elu",
-        
-        # 输出分布
+        depth_encoder=dict(
+            depth_height=48,
+            depth_width=64,
+            output_channels=[16, 32, 32],
+            kernel_size=[5, 4, 3],
+            stride=[2, 2, 1],
+            padding="zeros",
+            activation="LeakyReLU",
+            max_pool=False,
+            global_pool="none",
+            flatten=True,
+            embedding_dim=128,      # 由 flat_mlp=[128] 改成 embedding_dim=128
+            mlp_activation="elu",
+        ),
+
+        policy_head=dict(
+            input_dim=93 + 128,     # proprioception_dim + embedding_dim
+            output_dim=12,          # 这里通常需要和 distribution/input_dim 对齐；若框架自动处理可再调整
+            hidden_dims=[512, 256, 128],
+            activation="elu",
+        ),
+
+        proprio_group="noise_policy",
+        depth_group="depth_image",
+
         distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(
             init_std=1.0,
         ),
-        
+
         obs_normalization=False,
-
-        #obs normalization的范围？,是否需要对embedding对象进行归一化？
     )
-
 
     
     # ========== 蒸馏算法配置 ==========

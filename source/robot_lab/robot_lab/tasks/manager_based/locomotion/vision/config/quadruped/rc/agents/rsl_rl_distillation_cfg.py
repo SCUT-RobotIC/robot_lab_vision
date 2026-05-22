@@ -28,8 +28,9 @@ class StudentCNNPolicyCfg:
     class_func: type = StudentCNNPolicy
 
     # ========== 子模块配置 ==========
-    depth_encoder: dict = MISSING
-    policy_head: dict = MISSING
+    depth_encoder_cfg: dict | None = None
+    policy_head_hidden_dims: tuple[int, ...] | list[int] = (512, 256, 128)
+    policy_head_activation: str = "elu"
 
     # ========== 观测组名 ==========
     proprio_group: str = "noise_policy"
@@ -37,7 +38,7 @@ class StudentCNNPolicyCfg:
 
     # ========== 其他配置 ==========
     obs_normalization: bool = False
-    distribution_cfg: RslRlMLPModelCfg.GaussianDistributionCfg = MISSING
+    distribution_cfg: RslRlMLPModelCfg.GaussianDistributionCfg | None = None
 
 # ========================================
 # Distillation Runner Configuration
@@ -70,39 +71,29 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     )
     
     # ========== 学生网络配置（自定义 CNN+MLP）==========
-    student = StudentCNNPolicyCfg(
-        class_name="robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy",
-        depth_encoder=dict(
-            depth_height=48,
-            depth_width=64,
-            output_channels=[16, 32, 32],
-            kernel_size=[5, 4, 3],
-            stride=[2, 2, 1],
-            padding="zeros",
-            activation="LeakyReLU",
-            max_pool=False,
-            global_pool="none",
-            flatten=True,
-            embedding_dim=128,      # 由 flat_mlp=[128] 改成 embedding_dim=128
-            mlp_activation="elu",
-        ),
-
-        policy_head=dict(
-            input_dim=93 + 128,     # proprioception_dim + embedding_dim
-            output_dim=12,          # 这里通常需要和 distribution/input_dim 对齐；若框架自动处理可再调整
-            hidden_dims=[512, 256, 128],
-            activation="elu",
-        ),
-
-        proprio_group="noise_policy",
-        depth_group="depth_image",
-
-        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(
-            init_std=1.0,
-        ),
-
-        obs_normalization=False,
+    student = StudentCNNPolicyCfg()
+    student.depth_encoder_cfg = dict(
+        depth_height=48,
+        depth_width=64,
+        output_channels=[16, 32, 32],
+        kernel_size=[5, 4, 3],
+        stride=[2, 2, 1],
+        padding="same",
+        activation="LeakyReLU",
+        max_pool=False,
+        global_pool="none",
+        flatten=True,
+        embedding_dim=128,      # 由 flat_mlp=[128] 改成 embedding_dim=128
+        mlp_activation="elu",
     )
+    student.policy_head_hidden_dims = [512, 256, 128]
+    student.policy_head_activation = "elu"
+    student.proprio_group = "noise_policy"
+    student.depth_group = "depth_image"
+    student.distribution_cfg = RslRlMLPModelCfg.GaussianDistributionCfg(
+        init_std=1.0,
+    )
+    student.obs_normalization = False
 
     
     # ========== 蒸馏算法配置 ==========

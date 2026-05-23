@@ -121,6 +121,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         env_cfg.observations.policy.velocity_commands = ObsTerm(
             func=lambda env: torch.tensor(controller.advance(), dtype=torch.float32).unsqueeze(0).to(env.device),
         )
+        env_cfg.observations.noise_policy.velocity_commands = ObsTerm(
+            func=lambda env: torch.tensor(controller.advance(), dtype=torch.float32).unsqueeze(0).to(env.device),
+        )
 
     if args_cli.checkpoint is None:
         args_cli.checkpoint = os.path.join("logs", "cusrl", agent_cfg.experiment_name)

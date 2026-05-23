@@ -645,8 +645,8 @@ class StudentCNNPolicy(nn.Module):
 class _TorchDepthEncoder(nn.Module):
     def __init__(self, model: DepthEncoder) -> None:
         super().__init__()
-        self.cnn_encoder = model.cnn_encoder
-        self.depth_embedding_mlp = model.depth_embedding_mlp
+        self.cnn_encoder = copy.deepcopy(model.cnn_encoder)
+        self.depth_embedding_mlp = copy.deepcopy(model.depth_embedding_mlp)
         self.depth_height = model.depth_height
         self.depth_width = model.depth_width
         self.in_channels = model.in_channels
@@ -686,11 +686,22 @@ class _OnnxDepthEncoder(_TorchDepthEncoder):
         super().__init__(model)
         self.verbose = verbose
 
+    def get_dummy_inputs(self) -> tuple[torch.Tensor]:
+        return (torch.zeros(1, self.in_channels, self.depth_height, self.depth_width),)
+
+    @property
+    def input_names(self) -> list[str]:
+        return ["depth_image"]
+
+    @property
+    def output_names(self) -> list[str]:
+        return ["depth_embedding"]
+
 
 class _TorchPolicyHead(nn.Module):
     def __init__(self, model: PolicyHead) -> None:
         super().__init__()
-        self.policy_net = model.policy_net
+        self.policy_net = copy.deepcopy(model.policy_net)
         self.input_dim = model.input_dim
 
     def forward(self, latent: torch.Tensor) -> torch.Tensor:
@@ -706,16 +717,31 @@ class _OnnxPolicyHead(_TorchPolicyHead):
         super().__init__(model)
         self.verbose = verbose
 
+    def get_dummy_inputs(self) -> tuple[torch.Tensor]:
+        return (torch.zeros(1, self.input_dim),)
+
+    @property
+    def input_names(self) -> list[str]:
+        return ["latent"]
+
+    @property
+    def output_names(self) -> list[str]:
+        return ["actions"]
+
 
 class _TorchStudentCNNPolicy(nn.Module):
     def __init__(self, model: StudentCNNPolicy) -> None:
         super().__init__()
-        self.depth_encoder = model.depth_encoder
-        self.obs_normalizer = model.obs_normalizer
-        self.policy_head = model.policy_head
+        self.depth_encoder = copy.deepcopy(model.depth_encoder)
+        self.obs_normalizer = copy.deepcopy(model.obs_normalizer)
+        self.policy_head = copy.deepcopy(model.policy_head)
         self.proprio_group = model.proprio_group
         self.depth_group = model.depth_group
         self.proprio_dim = model.proprio_dim
+        if model.distribution is not None:
+            self.deterministic_output = model.distribution.as_deterministic_output_module()
+        else:
+            self.deterministic_output = nn.Identity()
 
     def forward(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
         proprio = obs[self.proprio_group]
@@ -729,10 +755,32 @@ class _TorchStudentCNNPolicy(nn.Module):
         proprio = self.obs_normalizer(proprio)
         depth_embedding = self.depth_encoder(depth)
         latent = torch.cat([proprio, depth_embedding], dim=-1)
-        return self.policy_head(latent)
+        return self.deterministic_output(self.policy_head(latent))
 
 
 class _OnnxStudentCNNPolicy(_TorchStudentCNNPolicy):
     def __init__(self, model: StudentCNNPolicy, verbose: bool) -> None:
         super().__init__(model)
         self.verbose = verbose
+
+    def get_dummy_inputs(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return (
+            torch.zeros(1, self.proprio_dim),
+            torch.zeros(1, self.depth_encoder.in_channels, self.depth_encoder.depth_height, self.depth_encoder.depth_width),
+        )
+
+    @property
+    def input_names(self) -> list[str]:
+        return ["proprio", "depth_image"]
+
+    @property
+    def output_names(self) -> list[str]:
+        return ["actions"]
+
+    def forward(self, proprio: torch.Tensor, depth_image: torch.Tensor) -> torch.Tensor:
+        if proprio.dim() != 2:
+            raise ValueError(f"Expected proprio input to be 2D, got {proprio.shape}.")
+        proprio = self.obs_normalizer(proprio)
+        depth_embedding = self.depth_encoder(depth_image)
+        latent = torch.cat([proprio, depth_embedding], dim=-1)
+        return self.deterministic_output(self.policy_head(latent))

@@ -426,8 +426,9 @@ class StudentCNNPolicy(nn.Module):
         if distribution_cfg is not None:
             dist_cfg = copy.deepcopy(distribution_cfg)
             dist_class: type[Distribution] = resolve_callable(dist_cfg.pop("class_name"))  # type: ignore
-            self.distribution: Distribution | None = dist_class(output_dim, **dist_cfg)
-            policy_head_output_dim = self.distribution.input_dim
+            distribution: Distribution = dist_class(output_dim, **dist_cfg)
+            self.distribution = distribution
+            policy_head_output_dim = distribution.input_dim
         else:
             self.distribution = None
             policy_head_output_dim = output_dim
@@ -639,3 +640,99 @@ class StudentCNNPolicy(nn.Module):
         proprio_dim = proprio.shape[-1]
         depth_shape = tuple(depth.shape[1:]) if depth.dim() > 1 else tuple(depth.shape)
         return proprio_dim, depth_shape
+
+
+class _TorchDepthEncoder(nn.Module):
+    def __init__(self, model: DepthEncoder) -> None:
+        super().__init__()
+        self.cnn_encoder = model.cnn_encoder
+        self.depth_embedding_mlp = model.depth_embedding_mlp
+        self.depth_height = model.depth_height
+        self.depth_width = model.depth_width
+        self.in_channels = model.in_channels
+
+    def forward(self, depth_image: torch.Tensor) -> torch.Tensor:
+        if depth_image.dim() == 2:
+            expected = self.depth_height * self.depth_width
+            if depth_image.shape[-1] != expected:
+                raise ValueError(
+                    f"2D depth input must have shape [B, {expected}], got {depth_image.shape}."
+                )
+            depth_image = depth_image.view(-1, self.in_channels, self.depth_height, self.depth_width)
+        elif depth_image.dim() == 3:
+            if depth_image.shape[-2:] != (self.depth_height, self.depth_width):
+                raise ValueError(
+                    f"3D depth input must have spatial shape ({self.depth_height}, {self.depth_width}), got {depth_image.shape}."
+                )
+            depth_image = depth_image.unsqueeze(1)
+        elif depth_image.dim() == 4:
+            if depth_image.shape[1] != self.in_channels:
+                raise ValueError(
+                    f"Depth input channel mismatch: expected {self.in_channels}, got {depth_image.shape[1]}."
+                )
+            if depth_image.shape[-2:] != (self.depth_height, self.depth_width):
+                raise ValueError(
+                    f"4D depth input must have spatial shape ({self.depth_height}, {self.depth_width}), got {depth_image.shape}."
+                )
+        else:
+            raise ValueError(f"Depth input must be 2D, 3D, or 4D, got shape {depth_image.shape}.")
+
+        cnn_features = self.cnn_encoder(depth_image)
+        return self.depth_embedding_mlp(cnn_features)
+
+
+class _OnnxDepthEncoder(_TorchDepthEncoder):
+    def __init__(self, model: DepthEncoder, verbose: bool) -> None:
+        super().__init__(model)
+        self.verbose = verbose
+
+
+class _TorchPolicyHead(nn.Module):
+    def __init__(self, model: PolicyHead) -> None:
+        super().__init__()
+        self.policy_net = model.policy_net
+        self.input_dim = model.input_dim
+
+    def forward(self, latent: torch.Tensor) -> torch.Tensor:
+        if latent.shape[-1] != self.input_dim:
+            raise ValueError(
+                f"PolicyHead expected latent dim {self.input_dim}, got {latent.shape[-1]}."
+            )
+        return self.policy_net(latent)
+
+
+class _OnnxPolicyHead(_TorchPolicyHead):
+    def __init__(self, model: PolicyHead, verbose: bool) -> None:
+        super().__init__(model)
+        self.verbose = verbose
+
+
+class _TorchStudentCNNPolicy(nn.Module):
+    def __init__(self, model: StudentCNNPolicy) -> None:
+        super().__init__()
+        self.depth_encoder = model.depth_encoder
+        self.obs_normalizer = model.obs_normalizer
+        self.policy_head = model.policy_head
+        self.proprio_group = model.proprio_group
+        self.depth_group = model.depth_group
+        self.proprio_dim = model.proprio_dim
+
+    def forward(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
+        proprio = obs[self.proprio_group]
+        depth = obs[self.depth_group]
+
+        if proprio.dim() != 2:
+            raise ValueError(
+                f"Expected proprio observation '{self.proprio_group}' to be 2D, got {proprio.shape}."
+            )
+
+        proprio = self.obs_normalizer(proprio)
+        depth_embedding = self.depth_encoder(depth)
+        latent = torch.cat([proprio, depth_embedding], dim=-1)
+        return self.policy_head(latent)
+
+
+class _OnnxStudentCNNPolicy(_TorchStudentCNNPolicy):
+    def __init__(self, model: StudentCNNPolicy, verbose: bool) -> None:
+        super().__init__(model)
+        self.verbose = verbose

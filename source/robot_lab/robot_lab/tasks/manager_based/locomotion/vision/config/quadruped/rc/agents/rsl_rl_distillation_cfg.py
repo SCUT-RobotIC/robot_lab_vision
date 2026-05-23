@@ -25,7 +25,7 @@ class StudentCNNPolicyCfg:
     class_name: str = (
         "robot_lab.tasks.manager_based.locomotion.vision.config.quadruped.rc.agents.student_cnn_policy:StudentCNNPolicy"
     )
-    class_func: type = StudentCNNPolicy
+    #class_func: type = StudentCNNPolicy
 
     # ========== 子模块配置 ==========
     depth_encoder_cfg: dict | None = None

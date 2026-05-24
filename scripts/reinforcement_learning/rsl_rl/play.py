@@ -150,6 +150,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         controller = Se2Keyboard(config)
         env_cfg.observations.policy.velocity_commands = ObsTerm(
             func=lambda env: torch.tensor(controller.advance(), dtype=torch.float32).unsqueeze(0).to(env.device),
+            # history_length=5,
+            # flatten_history_dim=True,
+            clip=(-100.0, 100.0),
+            scale=1.0,
+        )
+        env_cfg.observations.noise_policy.velocity_commands = ObsTerm(
+            func=lambda env: torch.tensor(controller.advance(), dtype=torch.float32).unsqueeze(0).to(env.device),
+            # history_length=5,
+            # flatten_history_dim=True,
+            clip=(-100.0, 100.0),
+            scale=3.0,
         )
 
     # specify directory for logging experiments

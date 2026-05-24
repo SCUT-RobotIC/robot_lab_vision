@@ -311,8 +311,8 @@ class ObservationsCfg:
             params={"command_name": "base_velocity"},
             clip=(-100.0, 100.0),
             scale=1.0,
-            history_length=5,
-            flatten_history_dim=True,
+            #history_length=5,
+            #flatten_history_dim=True,
         )
         joint_pos = ObsTerm(
             func=mdp.joint_pos_rel,
@@ -372,7 +372,7 @@ class ObservationsCfg:
     # observation groups
     policy: PolicyCfg = PolicyCfg()
     noise_policy: NoisePolicyCfg = NoisePolicyCfg()
-    depth: DepthImageCfg = DepthImageCfg()
+    depth_image: DepthImageCfg = DepthImageCfg()
     #depth_images
 
 

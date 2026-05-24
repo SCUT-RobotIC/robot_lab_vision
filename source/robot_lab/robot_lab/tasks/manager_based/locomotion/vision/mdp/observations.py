@@ -64,7 +64,7 @@ def feet_friction(
     else:
         selected_materials = materials[:, body_ids]
 
-    robot_static_friction = selected_materials[..., 0]
+    robot_static_friction = selected_materials[..., 0].to(device=env.device)
 
     terrain_static_friction = torch.as_tensor(
         env.scene.terrain.cfg.physics_material.static_friction, device=env.device, dtype=torch.float32
@@ -160,19 +160,21 @@ def pre_pocessing_depths(
     depth_image = torch.clamp(depth_image, 0.0, MAX_DEPTH)#
 
 
-    Random_Artifacts_images=random_artifacts_noise(depth_image, 0.05)#考虑噪声
+    
 
     # 假设基准误差系数为 0.005 (根据真机调参)
     # depth_image 越大的地方，噪声越大
     noise_std = 0.005 * (depth_image ** 2) 
     depth_image += torch.randn_like(depth_image) * noise_std
 
+    Random_Artifacts_images=random_artifacts_noise(depth_image, 0.05)#考虑噪声
+
     pre_pocessing_depths = Random_Artifacts_images
 
-    depth_image = depth_image / MAX_DEPTH  # 归一化到 [0, 1]
+    depth_image = pre_pocessing_depths / MAX_DEPTH  # 归一化到 [0, 1]
 
 
-    return pre_pocessing_depths
+    return depth_image
 
 
 def random_artifacts_noise(data: torch.Tensor, dropout_prob: float) -> torch.Tensor:

@@ -388,7 +388,7 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.2, 0.7),#与0.3进行average  #（0.25-0.75）
+            "static_friction_range": (0.2, 0.7),#与0.3进行average  #（0.25-0.5）
             "dynamic_friction_range": (0.2, 0.7),
             "restitution_range": (0.0, 0.5),
             "num_buckets": 64,

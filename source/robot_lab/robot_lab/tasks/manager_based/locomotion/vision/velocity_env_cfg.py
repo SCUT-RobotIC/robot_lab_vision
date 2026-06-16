@@ -265,15 +265,6 @@ class ObservationsCfg:
             flatten_history_dim=True,
         )
 
-        height_scan = ObsTerm(
-            func=mdp.height_scan,
-            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
-            noise=Unoise(n_min=-0.1, n_max=0.1),
-            clip=(-1.0, 1.0),
-            scale=1.0,
-            #history_length=5,
-            flatten_history_dim=True,
-        )
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -937,13 +928,13 @@ class CurriculumCfg:
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
-    # command_levels_lin_vel = CurrTerm(
-    #     func=mdp.command_levels_lin_vel,
-    #     params={
-    #         "reward_term_name": "track_lin_vel_xy_exp",
-    #         "range_multiplier": (0.5, 1.0),
-    #     },
-    # )
+    command_levels_lin_vel = CurrTerm(
+        func=mdp.command_levels_lin_vel,
+        params={
+            "reward_term_name": "track_lin_vel_xy_exp",
+            "range_multiplier": (1.0, 1.5),
+        },
+    )
 
     # command_levels_ang_vel = CurrTerm(
     #     func=mdp.command_levels_ang_vel,

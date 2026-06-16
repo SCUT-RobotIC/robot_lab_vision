@@ -203,7 +203,7 @@
     <child
       link="FL_calf_joint" />
     <axis
-      xyz="0 -1 0" />
+      xyz="0 1 0" />
     <limit effort="53.5" lower="-2.8012534494508987" upper="-0.7417649320975901" velocity="11"/>
   </joint>
   <link
@@ -794,7 +794,7 @@
     <child
       link="RR_thigh_joint" />
     <axis
-      xyz="0 -1 0" />
+      xyz="0 1 0" />
     <limit effort="53.5" lower="-1.0471975511965976" upper="4.1887902047863905" velocity="11"/>
   </joint>
   <link

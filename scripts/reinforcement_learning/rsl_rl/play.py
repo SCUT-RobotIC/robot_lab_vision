@@ -160,7 +160,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             # history_length=5,
             # flatten_history_dim=True,
             clip=(-100.0, 100.0),
-            scale=3.0,
+            scale=1.0,
         )
 
     # specify directory for logging experiments

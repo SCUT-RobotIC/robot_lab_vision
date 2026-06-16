@@ -55,7 +55,7 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     
     # ========== 观测组配置 ==========
     obs_groups: dict[str, list[str]] = {
-        "student": ["noise_policy", "depth_image"],  # 学生：本体感知 + 深度图
+        "student": ["noise_policy"],  # 学生：本体感知 + 深度图
         "teacher": ["policy"],   # 教师额外看特权信息
     }
     
@@ -71,30 +71,38 @@ class RCStudentDistillationRunnerCfg(RslRlDistillationRunnerCfg):
     )
     
     # ========== 学生网络配置（自定义 CNN+MLP）==========
-    student = StudentCNNPolicyCfg()
-    student.depth_encoder_cfg = dict(
-        depth_height=48,
-        depth_width=64,
-        output_channels=[16, 32, 32],
-        kernel_size=[5, 4, 3],
-        stride=[2, 2, 1],
-        padding="same",
-        activation="LeakyReLU",
-        max_pool=False,
-        global_pool="none",
-        flatten=True,
-        embedding_dim=128,      # 由 flat_mlp=[128] 改成 embedding_dim=128
-        mlp_activation="elu",
+    # student = StudentCNNPolicyCfg()
+    # student.depth_encoder_cfg = dict(
+    #     depth_height=48,
+    #     depth_width=64,
+    #     output_channels=[16, 32, 32],
+    #     kernel_size=[5, 4, 3],
+    #     stride=[2, 2, 1],
+    #     padding="same",
+    #     activation="LeakyReLU",
+    #     max_pool=False,
+    #     global_pool="none",
+    #     flatten=True,
+    #     embedding_dim=128,      # 由 flat_mlp=[128] 改成 embedding_dim=128
+    #     mlp_activation="elu",
+    # )
+    # student.policy_head_hidden_dims = [512, 256, 128]
+    # student.policy_head_activation = "elu"
+    # student.proprio_group = "noise_policy"
+    # student.depth_group = "depth_image"
+    # student.distribution_cfg = RslRlMLPModelCfg.GaussianDistributionCfg(
+    #     init_std=1.0,
+    # )
+    # student.obs_normalization = False
+    student = RslRlMLPModelCfg(
+        class_name="MLPModel",
+        hidden_dims=[512, 256, 128],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(
+            init_std=1.0,
+        ),
     )
-    student.policy_head_hidden_dims = [512, 256, 128]
-    student.policy_head_activation = "elu"
-    student.proprio_group = "noise_policy"
-    student.depth_group = "depth_image"
-    student.distribution_cfg = RslRlMLPModelCfg.GaussianDistributionCfg(
-        init_std=1.0,
-    )
-    student.obs_normalization = False
-
     
     # ========== 蒸馏算法配置 ==========
     algorithm: RslRlDistillationAlgorithmCfg = RslRlDistillationAlgorithmCfg(

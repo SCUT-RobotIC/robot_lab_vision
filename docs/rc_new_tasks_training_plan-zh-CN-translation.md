@@ -32,9 +32,7 @@
 
 ### 已完成初版
 `
-python scripts/reinforcement_learning/rsl_rl/train.py \
-  --task RobotLab-Isaac-Velocity-LowBar-RC-v0 \
-  --headless
+python scripts/reinforcement_learning/rsl_rl/train.py   --task RobotLab-Isaac-Velocity-LowBar-RC-v0   --headless
 `
 
 目标：添加一个指令的躯干高度，使机器人能够降低其躯干并通过一个高度限制的横杆，同时仍然跟踪速度。

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from isaaclab.assets import RigidObject
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.sensors import ContactSensor
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -35,3 +36,14 @@ def dead_down(
     asset: RigidObject = env.scene[asset_cfg.name]
     # 当 projected_gravity_b[:, 2] > threshold 时，机器人已经翻倒
     return asset.data.projected_gravity_b[:, 2] > threshold
+
+
+def low_bar_contact(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("low_bar_contact"),
+    threshold: float = 1.0,
+) -> torch.Tensor:
+    """Terminate when the low bar receives any meaningful contact force."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    net_contact_forces = contact_sensor.data.net_forces_w_history
+    return torch.any(torch.max(torch.norm(net_contact_forces, dim=-1), dim=1)[0] > threshold, dim=1)

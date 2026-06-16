@@ -62,6 +62,48 @@ class UniformThresholdVelocityCommandCfg(mdp.UniformVelocityCommandCfg):
     #创建与自定义命令生成器对应的配置类
 
 
+class UniformBaseHeightCommand(CommandTerm):
+    """Command generator that samples a scalar target base height."""
+
+    cfg: UniformBaseHeightCommandCfg
+
+    def __init__(self, cfg: UniformBaseHeightCommandCfg, env: ManagerBasedEnv):
+        super().__init__(cfg, env)
+        self.height_command = torch.zeros(self.num_envs, 1, device=self.device)
+
+    def __str__(self) -> str:
+        return (
+            "UniformBaseHeightCommand:\n"
+            f"\tNumber of environments: {self.num_envs}\n"
+            f"\tHeight range: {self.cfg.height_range}\n"
+        )
+
+    @property
+    def command(self) -> torch.Tensor:
+        """Target base height command. Shape is (num_envs, 1)."""
+        return self.height_command
+
+    def _update_metrics(self):
+        pass
+
+    def _resample_command(self, env_ids: Sequence[int]):
+        low, high = self.cfg.height_range
+        self.height_command[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(low, high)
+
+    def _update_command(self):
+        pass
+
+
+@configclass
+class UniformBaseHeightCommandCfg(CommandTermCfg):
+    """Configuration for scalar target base-height commands."""
+
+    class_type: type = UniformBaseHeightCommand
+
+    height_range: tuple[float, float] = (0.20, 0.28)
+    """Sampled target base height range in meters."""
+
+
 class DiscreteCommandController(CommandTerm):
     """
     Command generator that assigns discrete commands to environments.

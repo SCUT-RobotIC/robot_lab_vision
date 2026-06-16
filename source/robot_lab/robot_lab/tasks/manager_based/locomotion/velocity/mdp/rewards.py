@@ -81,6 +81,52 @@ def track_ang_vel_z_world_exp(
     return reward
 
 
+def track_base_height_command_exp(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    std: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward tracking a commanded floating-base height."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    target_height = env.command_manager.get_command(command_name)[:, 0]
+    height_error = torch.square(asset.data.root_pos_w[:, 2] - target_height)
+    reward = torch.exp(-height_error / std**2)
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def low_bar_clearance(
+    env: ManagerBasedRLEnv,
+    bar_height: float,
+    approach_distance: float,
+    margin: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    bar_x: float = 1.0,
+) -> torch.Tensor:
+    """Penalize high base posture when the robot is near the low bar."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    env_origins = env.scene.env_origins
+    root_pos = asset.data.root_pos_w - env_origins
+    near_bar = torch.abs(root_pos[:, 0] - bar_x) < approach_distance
+    clearance_violation = torch.clamp(root_pos[:, 2] - (bar_height - margin), min=0.0)
+    return clearance_violation * near_bar
+
+
+def low_bar_contact_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("low_bar_contact"),
+    threshold: float = 0.05,
+    max_force: float = 20.0,
+) -> torch.Tensor:
+    """Penalize contact with the low bar without necessarily terminating the episode."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    net_contact_forces = contact_sensor.data.net_forces_w_history
+    contact_force = torch.max(torch.norm(net_contact_forces, dim=-1), dim=1)[0]
+    contact_force = torch.max(contact_force, dim=1)[0]
+    return torch.clamp((contact_force - threshold) / max_force, min=0.0, max=1.0)
+
+
 def joint_power(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Reward joint_power"""
     # extract the used quantities (to enable type-hinting)

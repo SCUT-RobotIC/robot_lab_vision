@@ -79,7 +79,6 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         self.commands.base_velocity.heading_command = False
         self.commands.base_velocity.resampling_time_range = (4.0, 8.0)
         self.commands.base_height = mdp.UniformBaseHeightCommandCfg(
-            asset_name="robot",
             resampling_time_range=(4.0, 8.0),
             height_range=(0.20, 0.28),
         )

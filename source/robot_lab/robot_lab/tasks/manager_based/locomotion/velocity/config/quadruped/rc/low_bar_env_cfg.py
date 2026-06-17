@@ -2,17 +2,34 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import isaaclab.sim as sim_utils
+import isaaclab.terrains as terrain_gen
 from isaaclab.assets import RigidObjectCfg
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.terrains import TerrainGeneratorCfg
 from isaaclab.utils import configclass
 
 import robot_lab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from .rough_env_cfg import RCRoughEnvCfg
+
+
+LOW_BAR_FLAT_TERRAIN_CFG = TerrainGeneratorCfg(
+    size=(8.0, 8.0),
+    border_width=20.0,
+    num_rows=10,
+    num_cols=20,
+    horizontal_scale=0.1,
+    vertical_scale=0.005,
+    slope_threshold=0.75,
+    use_cache=False,
+    sub_terrains={
+        "plane": terrain_gen.MeshPlaneTerrainCfg(proportion=1.0),
+    },
+)
 
 
 @configclass
@@ -37,8 +54,8 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         # ------------------------------Scene------------------------------
         self.scene.height_scanner = None
         self.scene.height_scanner_base = None
-        self.scene.terrain.terrain_type = "plane"
-        self.scene.terrain.terrain_generator = None
+        self.scene.terrain.terrain_type = "generator"
+        self.scene.terrain.terrain_generator = LOW_BAR_FLAT_TERRAIN_CFG
 
         self.scene.low_bar = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/LowBar",

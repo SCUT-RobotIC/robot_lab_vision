@@ -2,35 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import isaaclab.sim as sim_utils
-import isaaclab.terrains as terrain_gen
 from isaaclab.assets import RigidObjectCfg
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.sensors import ContactSensorCfg
-from isaaclab.terrains import TerrainGeneratorCfg
 from isaaclab.utils import configclass
 
 import robot_lab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from .rough_env_cfg import RCRoughEnvCfg
-
-
-LOW_BAR_FLAT_TERRAIN_CFG = TerrainGeneratorCfg(
-    size=(8.0, 8.0),
-    border_width=20.0,
-    num_rows=10,
-    num_cols=20,
-    horizontal_scale=0.1,
-    vertical_scale=0.005,
-    slope_threshold=0.75,
-    use_cache=False,
-    sub_terrains={
-        "plane": terrain_gen.MeshPlaneTerrainCfg(proportion=1.0),
-    },
-)
-
 
 @configclass
 class RCLowBarEnvCfg(RCRoughEnvCfg):
@@ -54,8 +36,23 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         # ------------------------------Scene------------------------------
         self.scene.height_scanner = None
         self.scene.height_scanner_base = None
-        self.scene.terrain.terrain_type = "generator"
-        self.scene.terrain.terrain_generator = LOW_BAR_FLAT_TERRAIN_CFG
+        self.scene.terrain.terrain_type = "plane"
+        self.scene.terrain.terrain_generator = None
+        self.scene.robot.init_state.pos = (0.0, 0.0, 0.18)
+        self.scene.robot.init_state.joint_pos = {
+            "FL_hip_joint": 0.0,
+            "FL_thigh_joint": 1.10,
+            "FL_calf_joint": -2.45,
+            "FR_hip_joint": 0.0,
+            "FR_thigh_joint": 1.10,
+            "FR_calf_joint": -2.45,
+            "RL_hip_joint": 0.0,
+            "RL_thigh_joint": 1.40,
+            "RL_calf_joint": -2.45,
+            "RR_hip_joint": 0.0,
+            "RR_thigh_joint": 1.40,
+            "RR_calf_joint": -2.45,
+        }
 
         self.scene.low_bar = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/LowBar",
@@ -97,7 +94,7 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         self.commands.base_velocity.resampling_time_range = (4.0, 8.0)
         self.commands.base_height = mdp.UniformBaseHeightCommandCfg(
             resampling_time_range=(4.0, 8.0),
-            height_range=(0.20, 0.28),
+            height_range=(0.13, 0.18),
         )
 
         # ------------------------------Observations------------------------------
@@ -159,11 +156,11 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         )
         self.rewards.low_bar_clearance = RewTerm(
             func=mdp.low_bar_clearance,
-            weight=-8.0,
+            weight=-2.0,
             params={
                 "bar_height": self.low_bar_height,
                 "approach_distance": 0.45,
-                "margin": 0.04,
+                "margin": 0.12,
                 "asset_cfg": SceneEntityCfg("robot"),
                 "bar_x": self.low_bar_x,
             },
@@ -235,7 +232,7 @@ class RCLowBarPlayEnvCfg(RCLowBarEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
         self.commands.base_velocity.ranges.heading = (0.0, 0.0)
-        self.commands.base_height.height_range = (0.25, 0.25)
+        self.commands.base_height.height_range = (0.15, 0.15)
         self.events.randomize_apply_external_force_torque = None
         self.events.randomize_push_robot = None
         self.rewards.is_terminated.weight = -200.0

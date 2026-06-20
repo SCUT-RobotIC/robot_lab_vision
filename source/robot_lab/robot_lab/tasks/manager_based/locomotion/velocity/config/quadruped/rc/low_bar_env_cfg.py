@@ -84,10 +84,10 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         )
 
         # ------------------------------Commands------------------------------
-        self.commands.base_velocity.ranges.lin_vel_x = (0.25, 0.6)
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.05, 0.05)
-        self.commands.base_velocity.ranges.ang_vel_z = (-0.15, 0.15)
-        self.commands.base_velocity.ranges.heading = (-0.1, 0.1)
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
+        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
+        self.commands.base_velocity.ranges.heading = None
         self.commands.base_velocity.rel_standing_envs = 0.0
         self.commands.base_velocity.rel_heading_envs = 0.0
         self.commands.base_velocity.heading_command = False
@@ -141,6 +141,10 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
                 "yaw": (-0.1, 0.1),
             },
         }
+        self.events.randomize_reset_base.func = mdp.reset_root_state_aim_velocity_at_target
+        self.events.randomize_reset_base.params["command_name"] = "base_velocity"
+        self.events.randomize_reset_base.params["target_position"] = (self.low_bar_x, 0.0)
+        self.events.randomize_reset_base.params["min_command_norm"] = 0.2
 
         # ------------------------------Rewards------------------------------
         self.rewards.is_terminated.weight = -50.0
@@ -176,7 +180,7 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         )
         self.rewards.lin_vel_z_l2.weight = -1.0
         self.rewards.ang_vel_xy_l2.weight = -1.0
-        self.rewards.flat_orientation_l2.weight = -0.4
+        self.rewards.flat_orientation_l2.weight = -1.2
         self.rewards.lin_vel_xy_delta_l2.weight = -1.0
         self.rewards.joint_torques_l2.weight = -2.5e-5
         self.rewards.joint_acc_l2.weight = -2.5e-6
@@ -200,6 +204,16 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         self.rewards.feet_height_body.weight = -3.0
         self.rewards.feet_height_body.params["target_height"] = -0.18
         self.rewards.feet_height_body.params["asset_cfg"].body_names = [self.foot_link_name]
+        self.rewards.swing_feet_clearance = RewTerm(
+            func=mdp.swing_feet_clearance,
+            weight=0.2,
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[self.foot_link_name]),
+                "target_height": 0.08,
+                "command_name": "base_velocity",
+            },
+        )
         self.rewards.upward.weight = 0.2
 
         # ------------------------------Terminations------------------------------

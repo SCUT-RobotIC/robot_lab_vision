@@ -715,6 +715,27 @@ def feet_height_body(
     return reward
 
 
+def swing_feet_clearance(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    target_height: float,
+) -> torch.Tensor:
+    """Reward swing feet for clearing a target height above the ground."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    in_air = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids] > 0.0
+    foot_clearance = asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - env.scene.env_origins[:, 2].unsqueeze(1)
+    foot_clearance_reward = torch.clamp(foot_clearance / target_height, min=0.0, max=1.0)
+
+    reward = torch.sum(foot_clearance_reward * in_air.float(), dim=1) / len(asset_cfg.body_ids)
+    reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
 def feet_slide(
     env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:

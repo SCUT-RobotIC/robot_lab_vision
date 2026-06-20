@@ -1,0 +1,148 @@
+<mujoco model="rc_low_bar">
+  <compiler angle="radian" coordinate="local" inertiafromgeom="false"/>
+
+  <option timestep="0.005" iterations="50" solver="Newton" gravity="0 0 -9.81"/>
+
+  <size njmax="500" nconmax="200"/>
+
+  <default>
+    <joint damping="0" armature="0.02" limited="true"/>
+    <geom contype="1" conaffinity="1" condim="3" friction="0.9 0.02 0.001" solref="0.01 1" solimp="0.9 0.95 0.001"/>
+    <motor ctrllimited="true"/>
+  </default>
+
+  <asset>
+    <material name="body_gray" rgba="0.55 0.55 0.55 1"/>
+    <material name="leg_dark" rgba="0.18 0.18 0.18 1"/>
+    <material name="foot_black" rgba="0.03 0.03 0.03 1"/>
+    <material name="bar_red" rgba="0.95 0.15 0.08 1"/>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1="0.18 0.20 0.22" rgb2="0.25 0.27 0.30"/>
+    <material name="ground_grid" texture="grid" texrepeat="4 4" reflectance="0.05"/>
+  </asset>
+
+  <worldbody>
+    <light name="key" mode="targetbodycom" target="base_link" pos="0 -3 4"/>
+    <camera name="track" mode="trackcom" pos="-0.8 -3.0 1.0" xyaxes="1 0 0 0 0.32 0.95"/>
+
+    <geom name="floor" type="plane" size="8 4 0.1" material="ground_grid"/>
+    <geom name="low_bar" type="cylinder" pos="1.0 0 0.30" size="0.015 0.60" quat="0.70710678118 0.70710678118 0 0" material="bar_red"/>
+
+    <body name="base_link" pos="0 0 0.18">
+      <freejoint name="floating_base"/>
+      <inertial pos="0.0018007 0.00050163 -0.0031242" mass="3.8805"
+                fullinertia="0.0091487 0.0093184 0.015121 2.5012e-07 -1.6225e-07 5.4053e-07"/>
+      <geom name="base_collision" type="box" pos="0 0 0" size="0.22 0.075 0.055" material="body_gray"/>
+
+      <body name="FL_hip_link" pos="0.2295 0.055 0.01">
+        <joint name="FL_hip_joint" type="hinge" axis="-1 0 0" range="-0.9773843811168246 0.9773843811168246"/>
+        <inertial pos="-0.0540576457460417 0.01476386488615 2.01742383239972e-07" mass="0.0803274368129952"
+                  fullinertia="4.0947299372694e-05 4.21406633118441e-05 2.37088095622772e-05 6.41500278851855e-06 -9.8553493028397e-11 -3.94263588564453e-10"/>
+        <geom name="FL_hip_collision" type="capsule" fromto="0 0 0 0 0.105 0" size="0.035" material="leg_dark"/>
+        <body name="FL_thigh_link" pos="0 0.1231 0">
+          <joint name="FL_thigh_joint" type="hinge" axis="0 1 0" range="-1.0471975511965976 4.1887902047863905"/>
+          <inertial pos="-0.00324683145552185 -0.015244559490958 -0.0804104624359151" mass="0.816135538538748"
+                    fullinertia="0.00268607986891831 0.00298577665716733 0.000383303838645601 -1.67684650759994e-08 3.04326650841841e-05 1.29861318095895e-07"/>
+          <geom name="FL_thigh_collision" type="capsule" fromto="0 0 0 0 0.001 -0.25" size="0.035" material="leg_dark"/>
+          <body name="FL_calf_link" pos="0 0.001 -0.25">
+            <joint name="FL_calf_joint" type="hinge" axis="0 1 0" range="-2.8012534494508987 -0.7417649320975901"/>
+            <inertial pos="0.0139745255514478 -4.54045953959537e-05 -0.15970981716497" mass="0.125414534718457"
+                      fullinertia="0.000429468680832491 0.000440847899430506 1.86404975077032e-05 -1.9189027086433e-09 -5.1064766146865e-05 1.7274554868746e-09"/>
+            <geom name="FL_calf_collision" type="capsule" fromto="0 0 0 0.0125580634092529 0 -0.261416391848117" size="0.025" material="leg_dark"/>
+            <body name="FL_feet_joint" pos="0.0125580634092529 0 -0.261416391848117">
+              <inertial pos="-0.00120234554419277 5.10732945657733e-08 -0.00024041889031301" mass="0.0311288185938769"
+                        fullinertia="5.01532145993828e-06 4.46001536853022e-06 4.52316509579092e-06 2.69103862817347e-12 -3.4158708817764e-07 2.68520602888951e-11"/>
+              <geom name="FL_foot_collision" type="sphere" size="0.032" material="foot_black"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <body name="FR_hip_link" pos="0.2295 -0.055 0.01">
+        <joint name="FR_hip_joint" type="hinge" axis="-1 0 0" range="-0.9773843811168246 0.9773843811168246"/>
+        <inertial pos="-0.0540576457460417 -0.01476386488615 2.01742383239972e-07" mass="0.0803274368129952"
+                  fullinertia="4.0947299372694e-05 4.21406633118441e-05 2.37088095622772e-05 -6.41500278851855e-06 -9.8553493028397e-11 3.94263588564453e-10"/>
+        <geom name="FR_hip_collision" type="capsule" fromto="0 0 0 0 -0.105 0" size="0.035" material="leg_dark"/>
+        <body name="FR_thigh_link" pos="0 -0.1231 0">
+          <joint name="FR_thigh_joint" type="hinge" axis="0 1 0" range="-1.0471975511965976 4.1887902047863905"/>
+          <inertial pos="-0.00324683145552185 0.015244559490958 -0.0804104624359151" mass="0.816135538538748"
+                    fullinertia="0.00268607986891831 0.00298577665716733 0.000383303838645601 1.67684650759994e-08 3.04326650841841e-05 -1.29861318095895e-07"/>
+          <geom name="FR_thigh_collision" type="capsule" fromto="0 0 0 0 -0.001 -0.25" size="0.035" material="leg_dark"/>
+          <body name="FR_calf_link" pos="0 -0.001 -0.25">
+            <joint name="FR_calf_joint" type="hinge" axis="0 1 0" range="-2.8012534494508987 -0.7417649320975901"/>
+            <inertial pos="0.0139745255514478 4.54045953959537e-05 -0.15970981716497" mass="0.125414534718457"
+                      fullinertia="0.000429468680832491 0.000440847899430506 1.86404975077032e-05 1.9189027086433e-09 -5.1064766146865e-05 -1.7274554868746e-09"/>
+            <geom name="FR_calf_collision" type="capsule" fromto="0 0 0 0.0125580634092921 0 -0.261416391848119" size="0.025" material="leg_dark"/>
+            <body name="FR_feet_joint" pos="0.0125580634092921 0 -0.261416391848119">
+              <inertial pos="-0.00120234554419277 -5.10732945657733e-08 -0.00024041889031301" mass="0.0311288185938769"
+                        fullinertia="5.01532145993828e-06 4.46001536853022e-06 4.52316509579092e-06 -2.69103862817347e-12 -3.4158708817764e-07 -2.68520602888951e-11"/>
+              <geom name="FR_foot_collision" type="sphere" size="0.032" material="foot_black"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <body name="RL_hip_link" pos="-0.2295 0.055 0.01">
+        <joint name="RL_hip_joint" type="hinge" axis="1 0 0" range="-0.9773843811168246 0.9773843811168246"/>
+        <inertial pos="0.0540576457460417 0.01476386488615 2.01742383239972e-07" mass="0.0803274368129952"
+                  fullinertia="4.0947299372694e-05 4.21406633118441e-05 2.37088095622772e-05 -6.41500278851855e-06 9.8553493028397e-11 -3.94263588564453e-10"/>
+        <geom name="RL_hip_collision" type="capsule" fromto="0 0 0 0 0.105 0" size="0.035" material="leg_dark"/>
+        <body name="RL_thigh_link" pos="0 0.1231 0">
+          <joint name="RL_thigh_joint" type="hinge" axis="0 1 0" range="-1.0471975511965976 4.1887902047863905"/>
+          <inertial pos="0.00324683145552185 -0.015244559490958 -0.0804104624359151" mass="0.816135538538748"
+                    fullinertia="0.00268607986891831 0.00298577665716733 0.000383303838645601 1.67684650759994e-08 -3.04326650841841e-05 1.29861318095895e-07"/>
+          <geom name="RL_thigh_collision" type="capsule" fromto="0 0 0 0 0.001 -0.25" size="0.035" material="leg_dark"/>
+          <body name="RL_calf_link" pos="0 0.001 -0.25">
+            <joint name="RL_calf_joint" type="hinge" axis="0 1 0" range="-2.8012534494508987 -0.7417649320975901"/>
+            <inertial pos="-0.0139745255514478 -4.54045953959537e-05 -0.15970981716497" mass="0.125414534718457"
+                      fullinertia="0.000429468680832491 0.000440847899430506 1.86404975077032e-05 1.9189027086433e-09 5.1064766146865e-05 1.7274554868746e-09"/>
+            <geom name="RL_calf_collision" type="capsule" fromto="0 0 0 0.0125580634092528 0 -0.261416391848117" size="0.025" material="leg_dark"/>
+            <body name="RL_feet_joint" pos="0.0125580634092528 0 -0.261416391848117">
+              <inertial pos="0.00120234554419277 5.10732945657733e-08 -0.00024041889031301" mass="0.0311288185938769"
+                        fullinertia="5.01532145993828e-06 4.46001536853022e-06 4.52316509579092e-06 -2.69103862817347e-12 3.4158708817764e-07 2.68520602888951e-11"/>
+              <geom name="RL_foot_collision" type="sphere" size="0.032" material="foot_black"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <body name="RR_hip_link" pos="-0.2295 -0.055 0.01">
+        <joint name="RR_hip_joint" type="hinge" axis="1 0 0" range="-0.9773843811168246 0.9773843811168246"/>
+        <inertial pos="0.0540576457460417 -0.01476386488615 2.01742383239972e-07" mass="0.0803274368129952"
+                  fullinertia="4.0947299372694e-05 4.21406633118441e-05 2.37088095622772e-05 6.41500278851855e-06 9.8553493028397e-11 3.94263588564453e-10"/>
+        <geom name="RR_hip_collision" type="capsule" fromto="0 0 0 0 -0.105 0" size="0.035" material="leg_dark"/>
+        <body name="RR_thigh_link" pos="0 -0.1231 0">
+          <joint name="RR_thigh_joint" type="hinge" axis="0 1 0" range="-1.0471975511965976 4.1887902047863905"/>
+          <inertial pos="0.00324683145552185 0.015244559490958 -0.0804104624359151" mass="0.816135538538748"
+                    fullinertia="0.00268607986891831 0.00298577665716733 0.000383303838645601 -1.67684650759994e-08 -3.04326650841841e-05 -1.29861318095895e-07"/>
+          <geom name="RR_thigh_collision" type="capsule" fromto="0 0 0 0 -0.001 -0.25" size="0.035" material="leg_dark"/>
+          <body name="RR_calf_link" pos="0 -0.001 -0.25">
+            <joint name="RR_calf_joint" type="hinge" axis="0 1 0" range="-2.8012534494508987 -0.7417649320975901"/>
+            <inertial pos="-0.0139745255514478 4.54045953959537e-05 -0.15970981716497" mass="0.125414534718457"
+                      fullinertia="0.000429468680832491 0.000440847899430506 1.86404975077032e-05 -1.9189027086433e-09 5.1064766146865e-05 -1.7274554868746e-09"/>
+            <geom name="RR_calf_collision" type="capsule" fromto="0 0 0 0.0125580634092921 0 -0.261416391848119" size="0.025" material="leg_dark"/>
+            <body name="RR_feet_joint" pos="0.0125580634092921 0 -0.261416391848119">
+              <inertial pos="0.00120234554419277 -5.10732945657733e-08 -0.00024041889031301" mass="0.0311288185938769"
+                        fullinertia="5.01532145993828e-06 4.46001536853022e-06 4.52316509579092e-06 2.69103862817347e-12 3.4158708817764e-07 -2.68520602888951e-11"/>
+              <geom name="RR_foot_collision" type="sphere" size="0.032" material="foot_black"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor name="FL_hip_motor" joint="FL_hip_joint" gear="1" ctrlrange="-20 20"/>
+    <motor name="FL_thigh_motor" joint="FL_thigh_joint" gear="1" ctrlrange="-30 30"/>
+    <motor name="FL_calf_motor" joint="FL_calf_joint" gear="1" ctrlrange="-30 30"/>
+    <motor name="FR_hip_motor" joint="FR_hip_joint" gear="1" ctrlrange="-20 20"/>
+    <motor name="FR_thigh_motor" joint="FR_thigh_joint" gear="1" ctrlrange="-30 30"/>
+    <motor name="FR_calf_motor" joint="FR_calf_joint" gear="1" ctrlrange="-30 30"/>
+    <motor name="RL_hip_motor" joint="RL_hip_joint" gear="1" ctrlrange="-20 20"/>
+    <motor name="RL_thigh_motor" joint="RL_thigh_joint" gear="1" ctrlrange="-30 30"/>
+    <motor name="RL_calf_motor" joint="RL_calf_joint" gear="1" ctrlrange="-30 30"/>
+    <motor name="RR_hip_motor" joint="RR_hip_joint" gear="1" ctrlrange="-20 20"/>
+    <motor name="RR_thigh_motor" joint="RR_thigh_joint" gear="1" ctrlrange="-30 30"/>
+    <motor name="RR_calf_motor" joint="RR_calf_joint" gear="1" ctrlrange="-30 30"/>
+  </actuator>
+</mujoco>

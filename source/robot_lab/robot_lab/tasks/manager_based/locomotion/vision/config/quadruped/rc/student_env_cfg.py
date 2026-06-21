@@ -120,7 +120,7 @@ class StudentSceneCfg(InteractiveSceneCfg):
     
     # ========== 视觉传感器 ==========
     camera_wrist = TiledCameraCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base/wrist_camera",
+        prim_path="{ENV_REGEX_NS}/Robot/base_link/wrist_camera",
         update_period=0.1,
         height=84,
         width=84,
@@ -139,7 +139,7 @@ class StudentSceneCfg(InteractiveSceneCfg):
     )
     
     height_scanner = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base",
+        prim_path="{ENV_REGEX_NS}/Robot/base_link",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
@@ -148,7 +148,7 @@ class StudentSceneCfg(InteractiveSceneCfg):
     )
     
     height_scanner_base = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base",
+        prim_path="{ENV_REGEX_NS}/Robot/base_link",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=(0.1, 0.1)),

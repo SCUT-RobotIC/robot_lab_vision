@@ -128,45 +128,6 @@ def randomize_com_positions(
     asset.root_physx_view.set_coms(com_offsets, env_ids)
 
 
-def reset_root_state_aim_velocity_at_target(
-    env: ManagerBasedEnv,
-    env_ids: torch.Tensor,
-    pose_range: dict[str, tuple[float, float]],
-    velocity_range: dict[str, tuple[float, float]],
-    command_name: str,
-    target_position: tuple[float, float],
-    min_command_norm: float = 0.2,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-):
-    """Reset root state with initial yaw chosen so the commanded velocity points at a target."""
-    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
-    root_states = asset.data.default_root_state[env_ids].clone()
-
-    range_list = [pose_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
-    ranges = torch.tensor(range_list, device=asset.device)
-    rand_samples = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
-
-    positions = root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_samples[:, 0:3]
-    command_xy = env.command_manager.get_command(command_name)[env_ids, :2]
-    command_angle = torch.atan2(command_xy[:, 1], command_xy[:, 0])
-    target_pos = env.scene.env_origins[env_ids, :2] + torch.tensor(target_position, device=asset.device)
-    target_angle = torch.atan2(target_pos[:, 1] - positions[:, 1], target_pos[:, 0] - positions[:, 0])
-    yaw = target_angle - command_angle + rand_samples[:, 5]
-    zero_command = torch.linalg.norm(command_xy, dim=1) < min_command_norm
-    yaw = torch.where(zero_command, rand_samples[:, 5], yaw)
-
-    orientations_delta = math_utils.quat_from_euler_xyz(rand_samples[:, 3], rand_samples[:, 4], yaw)
-    orientations = math_utils.quat_mul(root_states[:, 3:7], orientations_delta)
-
-    range_list = [velocity_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
-    ranges = torch.tensor(range_list, device=asset.device)
-    rand_samples = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
-    velocities = root_states[:, 7:13] + rand_samples
-
-    asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=env_ids)
-    asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
-
-
 """
 Internal helper functions.
 """

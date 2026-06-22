@@ -411,7 +411,11 @@ def action_sync(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, joint_groups:
 
 
 def feet_air_time(
-    env: ManagerBasedRLEnv, command_name: str, sensor_cfg: SceneEntityCfg, threshold: float
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    sensor_cfg: SceneEntityCfg,
+    threshold: float,
+    max_air_time: float | None = None,
 ) -> torch.Tensor:
     """Reward long steps taken by the feet using L2-kernel.
 
@@ -429,8 +433,17 @@ def feet_air_time(
     #可参考feet_air_time_positive_biped中的single_stance写法，限制至少两只脚站立的时候再进行滞空奖励
     #？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？？
     last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
+    air_time_reward = last_air_time - threshold
+    if max_air_time is not None:
+        air_time_reward = torch.where(last_air_time > max_air_time, -air_time_reward, air_time_reward)
+        current_air_time = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids]
+        overlong_air_time = torch.clamp(current_air_time - max_air_time, min=0.0)
+    else:
+        overlong_air_time = 0.0
         #作为接触时的判断，
-    reward = torch.sum((last_air_time - threshold) * first_contact, dim=1)
+    reward = torch.sum(air_time_reward * first_contact, dim=1)
+    if max_air_time is not None:
+        reward -= torch.sum(overlong_air_time, dim=1)
     #空中时间-设定的阈值
     # no reward for zero command
     #单纯的站立姿态不做处理
@@ -715,25 +728,47 @@ def feet_height_body(
     return reward
 
 
-def swing_feet_clearance(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-    asset_cfg: SceneEntityCfg,
-    sensor_cfg: SceneEntityCfg,
-    target_height: float,
-) -> torch.Tensor:
-    """Reward swing feet for clearing a target height above the ground."""
-    asset: RigidObject = env.scene[asset_cfg.name]
-    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+class SwingFeetClearanceReward(ManagerTermBase):
+    """Reward swing foot clearance with a per-air-phase cap."""
 
-    in_air = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids] > 0.0
-    foot_clearance = asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - env.scene.env_origins[:, 2].unsqueeze(1)
-    foot_clearance_reward = torch.clamp(foot_clearance / target_height, min=0.0, max=1.0)
+    def __init__(self, cfg: RewTerm, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        asset_cfg: SceneEntityCfg = cfg.params["asset_cfg"]
+        self.num_feet = len(asset_cfg.body_ids)
+        self.accumulated_air_reward = torch.zeros(env.num_envs, self.num_feet, device=env.device)
 
-    reward = torch.sum(foot_clearance_reward * in_air.float(), dim=1) / len(asset_cfg.body_ids)
-    reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
-    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
-    return reward
+    def reset(self, env_ids: torch.Tensor | None = None):
+        if env_ids is None:
+            self.accumulated_air_reward.zero_()
+        else:
+            self.accumulated_air_reward[env_ids] = 0.0
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        command_name: str,
+        asset_cfg: SceneEntityCfg,
+        sensor_cfg: SceneEntityCfg,
+        target_height: float,
+        max_air_reward: float,
+    ) -> torch.Tensor:
+        asset: RigidObject = env.scene[asset_cfg.name]
+        contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+        in_air = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids] > 0.0
+        self.accumulated_air_reward *= in_air.float()
+
+        foot_clearance = asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - env.scene.env_origins[:, 2].unsqueeze(1)
+        foot_clearance_reward = torch.clamp(foot_clearance / target_height, min=0.0, max=1.0)
+        foot_clearance_reward *= in_air.float()
+        remaining_air_reward = torch.clamp(max_air_reward - self.accumulated_air_reward, min=0.0)
+        foot_clearance_reward = torch.minimum(foot_clearance_reward, remaining_air_reward)
+        self.accumulated_air_reward += foot_clearance_reward
+
+        reward = torch.sum(foot_clearance_reward, dim=1) / self.num_feet
+        reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
+        reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+        return reward
 
 
 def feet_slide(

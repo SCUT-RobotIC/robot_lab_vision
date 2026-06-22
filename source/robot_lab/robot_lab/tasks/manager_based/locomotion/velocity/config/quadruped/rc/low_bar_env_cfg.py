@@ -23,7 +23,7 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
     """
 
     base_link_name = "base_link"
-    foot_link_name = ".*_feet_joint"
+    foot_link_name = ".*_feet_link"
 
     low_bar_x = 1.0
     low_bar_height = 0.30
@@ -84,17 +84,25 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         )
 
         # ------------------------------Commands------------------------------
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
-        self.commands.base_velocity.ranges.heading = None
-        self.commands.base_velocity.rel_standing_envs = 0.0
-        self.commands.base_velocity.rel_heading_envs = 0.0
-        self.commands.base_velocity.heading_command = False
-        self.commands.base_velocity.resampling_time_range = (4.0, 8.0)
+        self.commands.base_velocity = mdp.LowBarVelocityCommandCfg(
+            asset_name="robot",
+            resampling_time_range=(4.0, 8.0),
+            rel_standing_envs=0.0,
+            rel_heading_envs=0.0,
+            heading_command=False,
+            debug_vis=True,
+            target_position=(self.low_bar_x, 0.0),
+            min_command_norm=0.2,
+            ranges=mdp.LowBarVelocityCommandCfg.Ranges(
+                lin_vel_x=(-0.5, 0.5),
+                lin_vel_y=(-0.3, 0.3),
+                ang_vel_z=(0.0, 0.0),
+                heading=None,
+            ),
+        )
         self.commands.base_height = mdp.UniformBaseHeightCommandCfg(
             resampling_time_range=(4.0, 8.0),
-            height_range=(0.13, 0.18),
+            height_range=(0.14, 0.18),
         )
 
         # ------------------------------Observations------------------------------
@@ -133,18 +141,23 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
                 "yaw": (-0.08, 0.08),
             },
             "velocity_range": {
-                "x": (-0.1, 0.1),
-                "y": (-0.05, 0.05),
-                "z": (-0.1, 0.1),
-                "roll": (-0.1, 0.1),
-                "pitch": (-0.1, 0.1),
-                "yaw": (-0.1, 0.1),
+                "x": (-0.05, 0.05),
+                "y": (-0.03, 0.03),
+                "z": (-0.05, 0.05),
+                "roll": (-0.03, 0.03),
+                "pitch": (-0.03, 0.03),
+                "yaw": (-0.03, 0.03),
             },
         }
-        self.events.randomize_reset_base.func = mdp.reset_root_state_aim_velocity_at_target
-        self.events.randomize_reset_base.params["command_name"] = "base_velocity"
-        self.events.randomize_reset_base.params["target_position"] = (self.low_bar_x, 0.0)
-        self.events.randomize_reset_base.params["min_command_norm"] = 0.2
+        self.events.randomize_apply_external_force_torque.params["force_range"] = (-2.0, 2.0)
+        self.events.randomize_apply_external_force_torque.params["torque_range"] = (-1.0, 1.0)
+        self.events.randomize_push_robot.interval_range_s = (12.0, 18.0)
+        self.events.randomize_push_robot.params["velocity_range"] = {
+            "x": (-0.1, 0.1),
+            "y": (-0.1, 0.1),
+            "roll": (-0.05, 0.05),
+            "pitch": (-0.05, 0.05),
+        }
 
         # ------------------------------Rewards------------------------------
         self.rewards.is_terminated.weight = -50.0
@@ -179,8 +192,8 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
             },
         )
         self.rewards.lin_vel_z_l2.weight = -1.0
-        self.rewards.ang_vel_xy_l2.weight = -1.0
-        self.rewards.flat_orientation_l2.weight = -1.2
+        self.rewards.ang_vel_xy_l2.weight = -1.5
+        self.rewards.flat_orientation_l2.weight = -0.6
         self.rewards.lin_vel_xy_delta_l2.weight = -1.0
         self.rewards.joint_torques_l2.weight = -2.5e-5
         self.rewards.joint_acc_l2.weight = -2.5e-6
@@ -189,28 +202,31 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
         self.rewards.joint_power.weight = -2e-5
         self.rewards.stand_still.weight = -0.5
         self.rewards.joint_pos_penalty.weight = -0.3
-        self.rewards.joint_mirror.weight = -0.03
+        self.rewards.joint_mirror.weight = -0.08
         self.rewards.action_rate_l2.weight = -0.03
+        self.rewards.action_sync.weight = -0.03
         self.rewards.undesired_contacts.weight = -2.0
         self.rewards.undesired_contacts.params["sensor_cfg"].body_names = [f"^(?!.*{self.foot_link_name}).*"]
         self.rewards.contact_forces.weight = -1.5e-4
         self.rewards.contact_forces.params["sensor_cfg"].body_names = [self.foot_link_name]
-        self.rewards.track_lin_vel_xy_exp.weight = 4.0
-        self.rewards.track_ang_vel_z_exp.weight = 1.0
+        self.rewards.track_lin_vel_xy_exp.weight = 6.0
+        self.rewards.track_ang_vel_z_exp.weight = 2.0
         self.rewards.feet_air_time.weight = 4.0
         self.rewards.feet_air_time.params["threshold"] = 0.35
+        self.rewards.feet_air_time.params["max_air_time"] = 0.6
         self.rewards.feet_air_time.params["sensor_cfg"].body_names = [self.foot_link_name]
         self.rewards.feet_contact_without_cmd.weight = 0.0
         self.rewards.feet_height_body.weight = -3.0
         self.rewards.feet_height_body.params["target_height"] = -0.18
         self.rewards.feet_height_body.params["asset_cfg"].body_names = [self.foot_link_name]
         self.rewards.swing_feet_clearance = RewTerm(
-            func=mdp.swing_feet_clearance,
-            weight=0.2,
+            func=mdp.SwingFeetClearanceReward,
+            weight=0.05,
             params={
                 "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
                 "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[self.foot_link_name]),
                 "target_height": 0.08,
+                "max_air_reward": 2.0,
                 "command_name": "base_velocity",
             },
         )
@@ -245,7 +261,7 @@ class RCLowBarPlayEnvCfg(RCLowBarEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = (0.35, 0.35)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
-        self.commands.base_velocity.ranges.heading = (0.0, 0.0)
+        self.commands.base_velocity.ranges.heading = None
         self.commands.base_height.height_range = (0.15, 0.15)
         self.events.randomize_apply_external_force_torque = None
         self.events.randomize_push_robot = None

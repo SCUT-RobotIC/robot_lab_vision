@@ -18,10 +18,9 @@ from robot_lab.tasks.manager_based.locomotion.vision.mdp.stair_slope import STAI
 
 @configclass
 class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
-    base_link_name = "base"
-    #base和trunk是固定关节连接且位置相同，可视为一体
+    base_link_name = "base_link"
     
-    foot_link_name = ".*_foot"
+    foot_link_name = ".*_feet_link"
     # fmt: off
     joint_names = [
         "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
@@ -168,7 +167,10 @@ class RCVisionTeacherEnvCfg(LocomotionVelocityTeacherEnvCfg):
         self.rewards.feet_height_body.params["target_height"] = -0.20
         self.rewards.feet_height_body.params["asset_cfg"].body_names = [self.foot_link_name]
         self.rewards.feet_gait.weight = 0
-        self.rewards.feet_gait.params["synced_feet_pair_names"] = (("FL_foot", "RR_foot"), ("FR_foot", "RL_foot"))
+        self.rewards.feet_gait.params["synced_feet_pair_names"] = (
+            ("FL_feet_link", "RR_feet_link"),
+            ("FR_feet_link", "RL_feet_link"),
+        )
         self.rewards.upward.weight = 0.4
 
         # If the weight of rewards is 0, set rewards to None

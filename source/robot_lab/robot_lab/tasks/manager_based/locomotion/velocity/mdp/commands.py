@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import torch
+import isaaclab.utils.math as math_utils
 from typing import TYPE_CHECKING, Sequence
 
 from isaaclab.managers import CommandTerm, CommandTermCfg
@@ -60,6 +61,63 @@ class UniformThresholdVelocityCommandCfg(mdp.UniformVelocityCommandCfg):
     #更适用于状态机任务，可将障碍任务进行分割
     class_type: type = UniformThresholdVelocityCommand
     #创建与自定义命令生成器对应的配置类
+
+
+class LowBarVelocityCommand(UniformThresholdVelocityCommand):
+    """Velocity command that aligns initial yaw so the sampled velocity points at the low bar."""
+
+    cfg: LowBarVelocityCommandCfg
+
+    def _resample_command(self, env_ids: Sequence[int]):
+        super()._resample_command(env_ids)
+
+        if isinstance(env_ids, slice):
+            env_ids = torch.arange(self.num_envs, device=self.device)
+        elif not isinstance(env_ids, torch.Tensor):
+            env_ids = torch.tensor(env_ids, device=self.device)
+
+        initial_resample = self.command_counter[env_ids] == 0
+        if not initial_resample.any():
+            return
+
+        env_ids = env_ids[initial_resample]
+        command_xy = self.vel_command_b[env_ids, :2]
+        moving = torch.linalg.norm(command_xy, dim=1) >= self.cfg.min_command_norm
+        if not moving.any():
+            return
+
+        env_ids = env_ids[moving]
+        command_xy = command_xy[moving]
+        command_angle = torch.atan2(command_xy[:, 1], command_xy[:, 0])
+        target_pos = self._env.scene.env_origins[env_ids, :2] + torch.tensor(
+            self.cfg.target_position, device=self.device
+        )
+        root_pos = self.robot.data.root_pos_w[env_ids, :2]
+        target_angle = torch.atan2(target_pos[:, 1] - root_pos[:, 1], target_pos[:, 0] - root_pos[:, 0])
+        yaw = math_utils.wrap_to_pi(target_angle - command_angle)
+
+        roll, pitch, _ = math_utils.euler_xyz_from_quat(self.robot.data.root_quat_w[env_ids])
+        root_pose = torch.cat(
+            [
+                self.robot.data.root_pos_w[env_ids],
+                math_utils.quat_from_euler_xyz(roll, pitch, yaw),
+            ],
+            dim=-1,
+        )
+        self.robot.write_root_pose_to_sim(root_pose, env_ids=env_ids)
+
+
+@configclass
+class LowBarVelocityCommandCfg(UniformThresholdVelocityCommandCfg):
+    """Configuration for low-bar velocity commands."""
+
+    class_type: type = LowBarVelocityCommand
+
+    target_position: tuple[float, float] = (1.0, 0.0)
+    """Target position in each environment frame that the initial command should point toward."""
+
+    min_command_norm: float = 0.2
+    """Commands below this norm are treated as standing and do not adjust initial yaw."""
 
 
 class UniformBaseHeightCommand(CommandTerm):

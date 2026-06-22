@@ -19,7 +19,7 @@ from robot_lab.tasks.manager_based.locomotion.velocity.mdp.stair_slope import ST
 @configclass
 class RCRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
     base_link_name = "base_link"
-    foot_link_name = ".*_feet_link"
+    foot_link_name = ".*_feet_joint"
     # fmt: off
     joint_names = [
         "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
@@ -158,8 +158,8 @@ class RCRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.feet_height_body.params["asset_cfg"].body_names = [self.foot_link_name]
         self.rewards.feet_gait.weight = 0
         self.rewards.feet_gait.params["synced_feet_pair_names"] = (
-            ("FL_feet_link", "RR_feet_link"),
-            ("FR_feet_link", "RL_feet_link"),
+            ("FL_feet_joint", "RR_feet_joint"),
+            ("FR_feet_joint", "RL_feet_joint"),
         )
         self.rewards.upward.weight = 0.4
 

@@ -124,8 +124,8 @@ class RCFlatEnvCfg(RCRoughEnvCfg):
         
         self.rewards.feet_gait.weight = 0
         self.rewards.feet_gait.params["synced_feet_pair_names"] = (
-            ("FL_feet_link", "RR_feet_link"),
-            ("FR_feet_link", "RL_feet_link"),
+            ("FL_feet_joint", "RR_feet_joint"),
+            ("FR_feet_joint", "RL_feet_joint"),
         )
         self.rewards.upward.weight = 0.4
 

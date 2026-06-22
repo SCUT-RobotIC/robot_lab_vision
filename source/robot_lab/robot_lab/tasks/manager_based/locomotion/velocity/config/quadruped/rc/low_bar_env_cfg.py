@@ -23,7 +23,7 @@ class RCLowBarEnvCfg(RCRoughEnvCfg):
     """
 
     base_link_name = "base_link"
-    foot_link_name = ".*_feet_link"
+    foot_link_name = ".*_feet_joint"
 
     low_bar_x = 1.0
     low_bar_height = 0.30

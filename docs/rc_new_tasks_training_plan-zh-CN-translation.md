@@ -369,6 +369,228 @@ noise_step: 0.02 m to 0.04 m
 *   一次添加一个任务。
 *   在正式部署前导出并验证观察/行动顺序。
 
+## 服务器继续训练工作流：从部署导出的 `policy.pt` 开始
+
+这部分用于服务器端继续低墙任务开发，前提是你手上只有部署工程里导出的 `policy.pt`，而没有原始训练日志中的 `model_*.pt` checkpoint。
+
+### 结论先说
+
+*   `policy.pt` 不能直接当作 `rsl_rl` 的恢复训练 checkpoint 使用。
+*   原因是它通常只包含部署所需的 actor，以及可能存在的 actor normalizer。
+*   它通常不包含 critic、PPO optimizer 状态、训练迭代状态等继续训练所需信息。
+*   因此不要把 `policy.pt` 复制到 `logs/` 后直接使用 `--resume` 指向它。
+*   正确做法是：把 `policy.pt` 当作 actor 的预训练初始化，再启动一个新的 PPO 训练。
+
+### 为什么 `policy.pt` 不能直接 `--resume`
+
+当前工程的 `rsl_rl` 训练脚本恢复逻辑会去加载标准训练 checkpoint，也就是类似：
+
+```text
+model_100.pt
+model_500.pt
+model_1000.pt
+```
+
+这类文件来自训练过程中的保存，通常位于：
+
+```text
+logs/rsl_rl/<experiment_name>/<run_name>/model_*.pt
+```
+
+而部署导出的 `policy.pt` 是给推理使用的 TorchScript/JIT 模型。它更接近“只保留前向推理所需的 actor 网络”，而不是完整训练状态。
+
+因此：
+
+```text
+不要做：cp policy.pt logs/.../model_1000.pt 然后 --resume
+```
+
+这不是可靠的恢复训练方式。
+
+### 服务器端推荐工作流
+
+建议按下面顺序继续：
+
+1.  在训练工程中创建低墙任务环境。
+2.  保持 actor 观测维度、动作维度、actor MLP 结构与 `RobotLab-Isaac-Velocity-Rough-RC-v0` 一致。
+3.  启动一个新的 PPO 训练 run，而不是 resume 旧 run。
+4.  在训练开始前，将部署导出的 `policy.pt` 加载为 actor 初始化权重。
+5.  如果 `policy.pt` 内含 actor normalizer，则一并加载到当前策略的 actor normalizer。
+6.  critic 保持随机初始化，让它在低墙任务中重新学习。
+
+可以把它理解为：
+
+```text
+actor: 使用旧部署策略热启动
+critic: 从零开始
+optimizer: 从零开始
+训练日志: 新建
+```
+
+这对于“已有全向爬楼梯/粗糙地形策略，现要迁移到低墙任务”的情况是合理且常用的做法。
+
+### 适用条件
+
+只有在下面条件满足时，才建议直接拿 `policy.pt` 做 actor 初始化：
+
+*   该 `policy.pt` 确实来自 RC 的 `rough` 或兼容任务。
+*   当前低墙任务的 actor 输入顺序与 `rough` 完全一致。
+*   当前低墙任务的 actor 输入维度与 `rough` 完全一致。
+*   当前低墙任务的动作维度与 `rough` 完全一致。
+*   当前 PPO 配置中的 actor 网络结构与原策略一致，例如：
+
+```text
+actor_hidden_dims = [512, 256, 128]
+activation = elu
+```
+
+如果你之后给 actor 新增了例如 `wall_height_obs`、`wall_distance_obs` 这类新观测，那么输入维度就变了，不能再直接完整加载该 `policy.pt` 作为 actor 初始化，除非额外做部分权重迁移。
+
+### 服务器端需要准备的信息
+
+在服务器上继续工作前，建议先整理以下内容：
+
+*   `policy.pt` 的绝对路径。
+*   该策略原始对应任务名。
+*   是否确定它来自 `rsl_rl` 导出的部署策略。
+*   当前服务器训练代码中 RC `rough` 的 actor hidden dims 和 activation。
+*   当前低墙任务是否严格保持了与 `rough` 相同的 actor 观测与动作定义。
+
+建议在服务器目录里单独记一个简短说明，例如：
+
+```text
+policy source: deployed RC rough policy
+task source: RobotLab-Isaac-Velocity-Rough-RC-v0
+obs layout: same as rough
+action layout: same as rough
+actor dims: [512, 256, 128]
+```
+
+这样后续不会混淆模型来源。
+
+### 目录建议
+
+建议在服务器训练工程中建立一个预训练权重目录，例如：
+
+```text
+artifacts/pretrained/rc_rough/policy.pt
+```
+
+或者：
+
+```text
+checkpoints/bootstrap/rc_rough_policy.pt
+```
+
+不要把它伪装成训练过程中生成的 `model_*.pt`。
+
+### 训练脚本建议改法
+
+推荐在训练脚本中增加一个新的命令行参数，例如：
+
+```text
+--pretrained_policy_jit /abs/path/to/policy.pt
+```
+
+其逻辑为：
+
+1.  正常创建 env 和 PPO runner。
+2.  在 `runner.learn(...)` 之前：
+    *   `torch.jit.load(policy_path)`
+    *   提取其中的 actor
+    *   将权重加载到当前 runner 的 actor
+    *   若存在 normalizer，则加载到 actor normalizer
+3.  不加载旧 critic，不加载旧 optimizer，不设置 `--resume`
+
+这样最清晰，也最不容易误用。
+
+### 命令层面的工作方式
+
+因为这是“初始化训练”而不是“恢复训练”，服务器端命令应当是“新训练命令 + 预训练 actor 路径”，而不是 `--resume`。
+
+示意形式：
+
+```bash
+python scripts/reinforcement_learning/rsl_rl/train.py \
+  --task RobotLab-Isaac-Velocity-LowWall-RC-v0 \
+  --pretrained_policy_jit /abs/path/to/policy.pt \
+  --run_name low_wall_from_deploy_policy
+```
+
+这里的关键点是：
+
+*   不加 `--resume`
+*   不依赖旧 `logs/rsl_rl/...` 中的 run 目录
+*   这是一个全新的训练 run
+
+### 如果后续找到了原始 `model_*.pt`
+
+如果之后在旧训练环境、服务器日志或备份中找到了真正的训练 checkpoint，例如：
+
+```text
+model_1000.pt
+```
+
+那么优先使用真正的训练 checkpoint，因为它可以更完整地恢复：
+
+*   actor
+*   critic
+*   optimizer 状态
+*   训练进度
+
+这时才推荐使用：
+
+```bash
+python scripts/reinforcement_learning/rsl_rl/train.py \
+  --task <new_task> \
+  --resume \
+  --experiment_name rc_rough \
+  --load_run <old_run_dir> \
+  --checkpoint model_1000.pt
+```
+
+也就是说：
+
+*   有 `model_*.pt` 时，优先 `--resume`
+*   只有 `policy.pt` 时，使用“actor 初始化再新开训练”
+
+### 针对低墙任务的具体建议
+
+对于当前“跨越约 0.30 米低墙”任务，如果你准备先做第一版服务器实验，推荐：
+
+1.  先保持 actor 观测完全与 `rough` 一致。
+2.  暂时不要给 actor 添加 `wall_height_obs` 和 `wall_distance_obs`。
+3.  使用部署导出的 `policy.pt` 初始化 actor。
+4.  只训练“正面跨越、墙体居中、单墙、低高度 curriculum”的第一版。
+5.  先验证从已有 locomotion policy 出发，是否比从零训练更快学会小墙跨越。
+
+推荐初始课程：
+
+```text
+wall height: 0.05 -> 0.10 -> 0.15 m
+wall orientation: perpendicular only
+wall lateral offset: 0
+command during crossing: vx > 0, vy = 0, wz = 0
+```
+
+如果这条线有效，再继续升级到更强版本，例如：
+
+*   加墙高/墙距观测，
+*   加 crossing mode，
+*   做部分权重迁移而不是完整 actor 初始化。
+
+### 服务器继续工作前的最短检查清单
+
+开始前请确认：
+
+*   `policy.pt` 是部署导出的 actor，而不是训练 checkpoint。
+*   当前任务 actor 观测顺序与 `rough` 完全一致。
+*   当前任务动作顺序与 `rough` 完全一致。
+*   actor hidden dims 与 activation 一致。
+*   将采用“新训练 + actor 初始化”，而不是 `--resume`。
+
+如果以上都满足，那么这条工作流就是当前最稳妥的服务器端推进方式。
+
 低门槛：
 
 *   添加 `base_height_cmd` 。

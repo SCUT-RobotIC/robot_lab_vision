@@ -148,20 +148,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             omega_z_sensitivity=env_cfg.commands.base_velocity.ranges.ang_vel_z[1],
         )
         controller = Se2Keyboard(config)
-        env_cfg.observations.policy.velocity_commands = ObsTerm(
-            func=lambda env: torch.tensor(controller.advance(), dtype=torch.float32).unsqueeze(0).to(env.device),
-            # history_length=5,
-            # flatten_history_dim=True,
+
+        def keyboard_velocity_commands(env):
+            return torch.tensor(controller.advance(), dtype=torch.float32).unsqueeze(0).to(env.device)
+
+        keyboard_velocity_commands_term = ObsTerm(
+            func=keyboard_velocity_commands,
+            history_length=5,
+            flatten_history_dim=True,
             clip=(-100.0, 100.0),
             scale=1.0,
         )
-        env_cfg.observations.noise_policy.velocity_commands = ObsTerm(
-            func=lambda env: torch.tensor(controller.advance(), dtype=torch.float32).unsqueeze(0).to(env.device),
-            # history_length=5,
-            # flatten_history_dim=True,
-            clip=(-100.0, 100.0),
-            scale=1.0,
-        )
+        env_cfg.observations.policy.velocity_commands = keyboard_velocity_commands_term
+        if hasattr(env_cfg.observations, "noise_policy"):
+            env_cfg.observations.noise_policy.velocity_commands = keyboard_velocity_commands_term
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)

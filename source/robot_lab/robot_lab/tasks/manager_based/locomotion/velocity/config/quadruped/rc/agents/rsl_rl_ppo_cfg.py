@@ -53,3 +53,14 @@ class RCLowBarPPORunnerCfg(RCRoughPPORunnerCfg):
         self.experiment_name = "rc_low_bar"
         self.policy.actor_hidden_dims = [512, 256, 128]
         self.policy.critic_hidden_dims = [512, 256, 128]
+
+
+@configclass
+class RCRoughStonesPPORunnerCfg(RCRoughPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.max_iterations = 15000
+        self.experiment_name = "rc_rough_stones"
+        self.policy.actor_hidden_dims = [512, 256, 128]
+        self.policy.critic_hidden_dims = [512, 256, 128]

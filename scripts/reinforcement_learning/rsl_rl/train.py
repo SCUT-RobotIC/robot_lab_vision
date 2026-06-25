@@ -99,6 +99,7 @@ from isaaclab.utils.io import dump_yaml
 
 from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, handle_deprecated_rsl_rl_cfg
 
+from isaaclab.utils.assets import retrieve_file_path
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
@@ -113,6 +114,27 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
+
+
+def resolve_resume_path(log_root_path: str, load_run: str | None, load_checkpoint: str | None) -> str:
+    """Resolve a checkpoint path, allowing explicit files outside the experiment log root."""
+    candidates = []
+    if load_run and load_checkpoint:
+        candidates.append(os.path.abspath(os.path.join(log_root_path, load_run, load_checkpoint)))
+    if load_checkpoint:
+        candidates.append(os.path.abspath(os.path.expanduser(load_checkpoint)))
+
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+
+    if load_checkpoint:
+        try:
+            return retrieve_file_path(load_checkpoint)
+        except FileNotFoundError:
+            pass
+
+    return get_checkpoint_path(log_root_path, load_run, load_checkpoint)
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -182,7 +204,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # save resume path before creating a new log_dir
     if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        resume_path = resolve_resume_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     # wrap for video recording
     if args_cli.video:

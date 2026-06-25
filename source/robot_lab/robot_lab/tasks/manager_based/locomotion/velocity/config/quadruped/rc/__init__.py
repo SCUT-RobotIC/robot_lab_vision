@@ -90,3 +90,23 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:RCLowWallPPORunnerCfg",
     },
 )
+
+gym.register(
+    id="RobotLab-Isaac-Velocity-BrokenBridge-RC-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.broken_bridge_env_cfg:RCBrokenBridgeEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:RCBrokenBridgePPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="RobotLab-Isaac-Velocity-BrokenBridge-Play-RC-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.broken_bridge_env_cfg:RCBrokenBridgePlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:RCBrokenBridgePPORunnerCfg",
+    },
+)

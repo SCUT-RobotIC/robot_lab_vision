@@ -75,3 +75,16 @@ class RCLowWallPPORunnerCfg(RCRoughPPORunnerCfg):
         self.experiment_name = "rc_low_wall"
         self.policy.actor_hidden_dims = [512, 256, 128]
         self.policy.critic_hidden_dims = [512, 256, 128]
+
+
+@configclass
+class RCBrokenBridgePPORunnerCfg(RCRoughPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.max_iterations = 16000
+        self.experiment_name = "rc_broken_bridge"
+        self.load_run = "../rc_rough_stones/2026-06-24_13-15-26"
+        self.load_checkpoint = "model_19999.pt"
+        self.policy.actor_hidden_dims = [512, 256, 128]
+        self.policy.critic_hidden_dims = [512, 256, 128]

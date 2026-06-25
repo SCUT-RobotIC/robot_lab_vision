@@ -240,13 +240,15 @@ class RCLowWallEnvCfg(RCRoughStonesEnvCfg):
 
 @configclass
 class RCLowWallPlayEnvCfg(RCLowWallEnvCfg):
+    wall_height_range = (0.30, 0.30)
+
     def __post_init__(self):
         super().__post_init__()
 
         self.scene.num_envs = 50
         self.scene.env_spacing = 2.5
         self.observations.policy.enable_corruption = False
-        self.commands.base_velocity.ranges.lin_vel_x = (0.5, 0.5)
+        self.commands.base_velocity.ranges.lin_vel_x = (0.75, 0.75)
         self.events.randomize_apply_external_force_torque = None
         self.events.randomize_push_robot = None
         self.curriculum.low_wall_height = None

@@ -243,6 +243,105 @@ def low_wall_feet_clearance(
     return reward
 
 
+def _broken_bridge_masks(
+    env: ManagerBasedRLEnv,
+    foot_pos: torch.Tensor,
+    x_flat_length: float,
+    y_flat_length: float,
+    groove_width: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    local_pos = foot_pos - env.scene.env_origins[:, None, :]
+    x = local_pos[:, :, 0]
+    y = local_pos[:, :, 1]
+    x_cycle_length = x_flat_length + groove_width
+    y_cycle_length = y_flat_length + groove_width
+    x_phase = torch.remainder(x + 0.5 * x_cycle_length, x_cycle_length)
+    y_phase = torch.remainder(y + 0.5 * y_cycle_length, y_cycle_length)
+    in_x_groove = x_phase >= x_flat_length
+    in_y_groove = y_phase >= y_flat_length
+    in_groove = in_x_groove | in_y_groove
+    on_flat = ~in_groove
+    return on_flat, in_groove
+
+
+def broken_bridge_feet_on_blocks(
+    env: ManagerBasedRLEnv,
+    x_flat_length: float,
+    y_flat_length: float,
+    groove_width: float,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    command_name: str,
+) -> torch.Tensor:
+    """Reward feet that make contact on the flat top surface between grooves."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contacts = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+    on_flat, _ = _broken_bridge_masks(
+        env,
+        asset.data.body_pos_w[:, asset_cfg.body_ids, :],
+        x_flat_length,
+        y_flat_length,
+        groove_width,
+    )
+    reward = torch.sum((contacts & on_flat).float(), dim=1) / max(len(asset_cfg.body_ids), 1)
+    reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def broken_bridge_feet_in_gap(
+    env: ManagerBasedRLEnv,
+    x_flat_length: float,
+    y_flat_length: float,
+    groove_width: float,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize contacting the bottom of x/y grooves."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contacts = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+    _, in_groove = _broken_bridge_masks(
+        env,
+        asset.data.body_pos_w[:, asset_cfg.body_ids, :],
+        x_flat_length,
+        y_flat_length,
+        groove_width,
+    )
+    penalty = torch.sum((contacts & in_groove).float(), dim=1) / max(len(asset_cfg.body_ids), 1)
+    penalty *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return penalty
+
+
+def broken_bridge_progress(
+    env: ManagerBasedRLEnv,
+    start_x: float,
+    finish_x: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward forward progress across the grooved field."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    root_x = asset.data.root_pos_w[:, 0] - env.scene.env_origins[:, 0]
+    progress = (root_x - start_x) / (finish_x - start_x)
+    reward = torch.clamp(progress, min=0.0, max=1.0)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def broken_bridge_centerline(
+    env: ManagerBasedRLEnv,
+    std: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward keeping the base near the central travel corridor."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    root_y = asset.data.root_pos_w[:, 1] - env.scene.env_origins[:, 1]
+    reward = torch.exp(-torch.square(root_y) / std**2)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
 def joint_power(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Reward joint_power"""
     # extract the used quantities (to enable type-hinting)

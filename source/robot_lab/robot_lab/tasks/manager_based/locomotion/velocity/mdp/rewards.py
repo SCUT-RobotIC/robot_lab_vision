@@ -127,6 +127,122 @@ def low_bar_contact_penalty(
     return torch.clamp((contact_force - threshold) / max_force, min=0.0, max=1.0)
 
 
+def body_x_alignment(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward keeping the robot body's forward axis aligned with world +X."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    forward_b = torch.zeros(env.num_envs, 3, device=env.device)
+    forward_b[:, 0] = 1.0
+    forward_w = math_utils.quat_apply(asset.data.root_quat_w, forward_b)
+    reward = torch.clamp(forward_w[:, 0], min=-1.0, max=1.0)
+    reward = 0.5 * (reward + 1.0)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def track_lin_vel_xy_exp_wall_contact_tolerant(
+    env: ManagerBasedRLEnv,
+    std: float,
+    command_name: str,
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg,
+    wall_x: float,
+    approach_distance: float,
+    contact_threshold: float,
+    slowdown_factor: float,
+) -> torch.Tensor:
+    """Track commanded xy velocity, allowing lower x speed while bodies are contacting the wall."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    contact_forces = torch.max(torch.norm(contact_forces, dim=-1), dim=1)[0]
+    body_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+    near_wall_contact = torch.any(
+        (torch.abs(body_pos[:, :, 0] - wall_x) < approach_distance) & (contact_forces > contact_threshold),
+        dim=1,
+    )
+
+    command = env.command_manager.get_command(command_name)[:, :2]
+    actual = asset.data.root_lin_vel_b[:, :2]
+    target_x = command[:, 0]
+    actual_x = actual[:, 0]
+    relaxed_x = target_x * slowdown_factor
+
+    normal_x_error = target_x - actual_x
+    contact_x_error = torch.clamp(relaxed_x - actual_x, min=0.0) + torch.clamp(actual_x - target_x, min=0.0)
+    x_error = torch.where(near_wall_contact, contact_x_error, normal_x_error)
+    y_error = command[:, 1] - actual[:, 1]
+
+    lin_vel_error = torch.square(x_error) + torch.square(y_error)
+    reward = torch.exp(-lin_vel_error / std**2)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def low_wall_body_contact_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    threshold: float,
+    max_force: float,
+    asset_cfg: SceneEntityCfg | None = None,
+    wall_x: float | None = None,
+    approach_distance: float | None = None,
+) -> torch.Tensor:
+    """Penalize selected robot bodies receiving contact forces near the low wall."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    net_contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    contact_force = torch.max(torch.norm(net_contact_forces, dim=-1), dim=1)[0]
+    if asset_cfg is not None and wall_x is not None and approach_distance is not None:
+        asset: RigidObject = env.scene[asset_cfg.name]
+        body_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+        near_wall = torch.abs(body_pos[:, :, 0] - wall_x) < approach_distance
+        contact_force = contact_force * near_wall.float()
+    contact_force = torch.max(contact_force, dim=1)[0]
+    return torch.clamp((contact_force - threshold) / max_force, min=0.0, max=1.0)
+
+
+def low_wall_progress(
+    env: ManagerBasedRLEnv,
+    wall_x: float,
+    finish_distance: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward moving from the near side to the far side of the wall."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    root_x = asset.data.root_pos_w[:, 0] - env.scene.env_origins[:, 0]
+    progress = (root_x - wall_x + finish_distance) / (2.0 * finish_distance)
+    reward = torch.clamp(progress, min=0.0, max=1.0)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def low_wall_feet_clearance(
+    env: ManagerBasedRLEnv,
+    wall_x: float,
+    approach_distance: float,
+    margin: float,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    command_name: str,
+) -> torch.Tensor:
+    """Reward swing feet clearing the exposed wall height near the obstacle."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    foot_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+    near_wall = torch.abs(foot_pos[:, :, 0] - wall_x) < approach_distance
+    in_air = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids] > 0.0
+    wall_height = getattr(env, "_low_wall_height", torch.full((env.num_envs,), 0.15, device=env.device))
+    target = wall_height.unsqueeze(1) + margin
+    clearance = torch.clamp((foot_pos[:, :, 2] - target) / margin, min=0.0, max=1.0)
+    reward = torch.sum(clearance * near_wall.float() * in_air.float(), dim=1) / max(len(asset_cfg.body_ids), 1)
+    reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
 def joint_power(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Reward joint_power"""
     # extract the used quantities (to enable type-hinting)

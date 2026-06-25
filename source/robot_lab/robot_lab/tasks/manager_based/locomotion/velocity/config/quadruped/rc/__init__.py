@@ -70,3 +70,23 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:RCRoughStonesPPORunnerCfg",
     },
 )
+
+gym.register(
+    id="RobotLab-Isaac-Velocity-LowWall-RC-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.low_wall_env_cfg:RCLowWallEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:RCLowWallPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="RobotLab-Isaac-Velocity-LowWall-Play-RC-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.low_wall_env_cfg:RCLowWallPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:RCLowWallPPORunnerCfg",
+    },
+)

@@ -64,3 +64,14 @@ class RCRoughStonesPPORunnerCfg(RCRoughPPORunnerCfg):
         self.experiment_name = "rc_rough_stones"
         self.policy.actor_hidden_dims = [512, 256, 128]
         self.policy.critic_hidden_dims = [512, 256, 128]
+
+
+@configclass
+class RCLowWallPPORunnerCfg(RCRoughPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.max_iterations = 12000
+        self.experiment_name = "rc_low_wall"
+        self.policy.actor_hidden_dims = [512, 256, 128]
+        self.policy.critic_hidden_dims = [512, 256, 128]

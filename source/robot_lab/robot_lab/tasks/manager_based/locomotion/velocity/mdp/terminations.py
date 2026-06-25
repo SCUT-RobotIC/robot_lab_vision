@@ -47,3 +47,14 @@ def low_bar_contact(
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     net_contact_forces = contact_sensor.data.net_forces_w_history
     return torch.any(torch.max(torch.norm(net_contact_forces, dim=-1), dim=1)[0] > threshold, dim=1)
+
+
+def selected_body_force(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    threshold: float,
+) -> torch.Tensor:
+    """Terminate when selected bodies receive an excessive contact force."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    net_contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    return torch.any(torch.max(torch.norm(net_contact_forces, dim=-1), dim=1)[0] > threshold, dim=1)

@@ -92,3 +92,24 @@ def command_levels_vel(
     # 返回当前x轴速度范围的上限，但作为评估，是使用x进行评估
     return torch.tensor(base_velocity_ranges.lin_vel_x[1], device=env.device)
 
+
+def low_wall_height_curriculum(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    reward_term_name: str,
+    success_threshold: float,
+    increment: float,
+    max_progress: float = 1.0,
+) -> torch.Tensor:
+    """Increase the exposed wall height when the policy keeps good forward progress."""
+    if env.common_step_counter == 0:
+        env._low_wall_curriculum_progress = 0.0
+
+    if env.common_step_counter % env.max_episode_length == 0:
+        episode_sums = env.reward_manager._episode_sums[reward_term_name]
+        reward_term_cfg = env.reward_manager.get_term_cfg(reward_term_name)
+        normalized_reward = torch.mean(episode_sums[env_ids]) / env.max_episode_length_s
+        if normalized_reward > success_threshold * reward_term_cfg.weight:
+            env._low_wall_curriculum_progress = min(env._low_wall_curriculum_progress + increment, max_progress)
+
+    return torch.tensor(env._low_wall_curriculum_progress, device=env.device)

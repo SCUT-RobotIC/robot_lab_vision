@@ -14,6 +14,38 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
 
+def reset_low_wall_position(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    wall_x: float,
+    wall_height_range: tuple[float, float],
+    wall_max_height: float,
+):
+    """Reset the low wall pose and expose the current curriculum height above ground."""
+    wall: RigidObject = env.scene[asset_cfg.name]
+    if env_ids is None or isinstance(env_ids, slice):
+        env_ids = torch.arange(env.scene.num_envs, device=env.device)
+    elif not isinstance(env_ids, torch.Tensor):
+        env_ids = torch.tensor(env_ids, device=env.device)
+    else:
+        env_ids = env_ids.to(device=env.device)
+
+    progress = getattr(env, "_low_wall_curriculum_progress", 0.0)
+    height = wall_height_range[0] + progress * (wall_height_range[1] - wall_height_range[0])
+    wall_state = wall.data.default_root_state[env_ids].clone()
+    wall_state[:, :3] = env.scene.env_origins[env_ids]
+    wall_state[:, 0] += wall_x
+    wall_state[:, 1] += 0.0
+    wall_state[:, 2] += height - 0.5 * wall_max_height
+    wall_state[:, 7:] = 0.0
+    wall.write_root_state_to_sim(wall_state, env_ids=env_ids)
+
+    if not hasattr(env, "_low_wall_height"):
+        env._low_wall_height = torch.full((env.scene.num_envs,), height, device=env.device)
+    env._low_wall_height[env_ids] = height
+
+
 def randomize_rigid_body_inertia(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor | None,

@@ -4,6 +4,7 @@
 import isaaclab.terrains as terrain_gen
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
 
 import robot_lab.tasks.manager_based.locomotion.velocity.mdp as mdp
@@ -26,14 +27,14 @@ RC_BROKEN_BRIDGE_CFG = terrain_gen.TerrainGeneratorCfg(
         "broken_bridge": HfBrokenBridgeTerrainCfg(
             proportion=1.0,
             x_flat_length=0.40,
-            y_flat_length=1.00,
             groove_width=0.15,
             groove_depth=0.20,
+            skip_every_n_groove=7,
             border_width=0.0,
         ),
     },
 )
-"""Flat field with 0.4/1.0 m flat spans separated by 0.15 m wide grooves."""
+"""Flat field with 0.4 m flat spans separated by 0.15 m wide x-direction grooves."""
 
 
 @configclass
@@ -41,11 +42,12 @@ class RCBrokenBridgeEnvCfg(RCRoughStonesEnvCfg):
     """RC robot broken-bridge task initialized from rough-stones locomotion."""
 
     x_flat_length = 0.40
-    y_flat_length = 1.00
     groove_width = 0.15
     groove_depth = 0.20
-    start_x = -3.5
+    skip_every_n_groove = 7
+    start_x = -0.20
     finish_x = 3.5
+    termination_switch_step = 400_000
 
     def __post_init__(self):
         super().__post_init__()
@@ -56,7 +58,7 @@ class RCBrokenBridgeEnvCfg(RCRoughStonesEnvCfg):
         self.scene.terrain.physics_material.static_friction = 0.9
         self.scene.terrain.physics_material.dynamic_friction = 0.8
         self.scene.terrain.physics_material.restitution = 0.02
-        self.scene.robot.init_state.pos = (self.start_x + 0.20, 0.0, 0.34)
+        self.scene.robot.init_state.pos = (self.start_x, 0.0, 0.34)
 
         # ------------------------------Commands------------------------------
         self.commands.base_velocity.ranges.lin_vel_x = (0.25, 0.65)
@@ -70,7 +72,7 @@ class RCBrokenBridgeEnvCfg(RCRoughStonesEnvCfg):
         # ------------------------------Events------------------------------
         self.events.randomize_reset_base.params = {
             "pose_range": {
-                "x": (-0.04, 0.04),
+                "x": (-0.03, 0.03),
                 "y": (-0.08, 0.08),
                 "z": (0.0, 0.04),
                 "roll": (-0.04, 0.04),
@@ -130,8 +132,9 @@ class RCBrokenBridgeEnvCfg(RCRoughStonesEnvCfg):
 
         groove_params = {
             "x_flat_length": self.x_flat_length,
-            "y_flat_length": self.y_flat_length,
             "groove_width": self.groove_width,
+            "groove_depth": self.groove_depth,
+            "skip_every_n_groove": self.skip_every_n_groove,
         }
         self.rewards.body_x_alignment = RewTerm(
             func=mdp.body_x_alignment,
@@ -157,7 +160,7 @@ class RCBrokenBridgeEnvCfg(RCRoughStonesEnvCfg):
         )
         self.rewards.broken_bridge_feet_on_blocks = RewTerm(
             func=mdp.broken_bridge_feet_on_blocks,
-            weight=3.0,
+            weight=2.0,
             params={
                 **groove_params,
                 "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
@@ -165,8 +168,24 @@ class RCBrokenBridgeEnvCfg(RCRoughStonesEnvCfg):
                 "command_name": "base_velocity",
             },
         )
-        self.rewards.broken_bridge_feet_in_gap = RewTerm(
-            func=mdp.broken_bridge_feet_in_gap,
+        self.rewards.broken_bridge_feet_above_groove = RewTerm(
+            func=mdp.broken_bridge_feet_above_groove,
+            weight=-0.6,
+            params={
+                **groove_params,
+                "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
+            },
+        )
+        self.rewards.broken_bridge_feet_recovery = RewTerm(
+            func=mdp.BrokenBridgeFeetRecoveryReward,
+            weight=0.75,
+            params={
+                **groove_params,
+                "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
+            },
+        )
+        self.rewards.broken_bridge_feet_bottom_contact = RewTerm(
+            func=mdp.broken_bridge_feet_bottom_contact,
             weight=-8.0,
             params={
                 **groove_params,
@@ -177,6 +196,18 @@ class RCBrokenBridgeEnvCfg(RCRoughStonesEnvCfg):
 
         # ------------------------------Terminations------------------------------
         self.terminations.illegal_contact = None
+        self.terminations.broken_bridge_bottom_contacts = DoneTerm(
+            func=mdp.broken_bridge_groove_bottom_contacts,
+            params={
+                **groove_params,
+                "early_contact_count": 3,
+                "late_contact_count": 2,
+                "switch_step": self.termination_switch_step,
+                "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[self.foot_link_name]),
+                "contact_threshold": 1.0,
+            },
+        )
 
         # ------------------------------Curriculums------------------------------
         self.curriculum.terrain_levels = None

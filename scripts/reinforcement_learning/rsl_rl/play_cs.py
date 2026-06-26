@@ -106,6 +106,27 @@ from rl_utils import camera_follow
 # PLACEHOLDER: Extension template (do not remove this comment)
 
 
+def resolve_resume_path(log_root_path: str, load_run: str | None, load_checkpoint: str | None) -> str:
+    """Resolve a checkpoint path, allowing explicit files outside the experiment log root."""
+    candidates = []
+    if load_run and load_checkpoint:
+        candidates.append(os.path.abspath(os.path.join(log_root_path, load_run, load_checkpoint)))
+    if load_checkpoint:
+        candidates.append(os.path.abspath(os.path.expanduser(load_checkpoint)))
+
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+
+    if load_checkpoint:
+        try:
+            return retrieve_file_path(load_checkpoint)
+        except FileNotFoundError:
+            pass
+
+    return get_checkpoint_path(log_root_path, load_run, load_checkpoint)
+
+
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
     """Play with RSL-RL agent."""
@@ -204,7 +225,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     elif args_cli.checkpoint:
         resume_path = retrieve_file_path(args_cli.checkpoint)
     else:
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        resume_path = resolve_resume_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     log_dir = os.path.dirname(resume_path)
 

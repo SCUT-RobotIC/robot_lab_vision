@@ -247,28 +247,33 @@ def _broken_bridge_masks(
     env: ManagerBasedRLEnv,
     foot_pos: torch.Tensor,
     x_flat_length: float,
-    y_flat_length: float,
     groove_width: float,
-) -> tuple[torch.Tensor, torch.Tensor]:
+    groove_depth: float = 0.20,
+    skip_every_n_groove: int = 0,
+    bottom_margin: float = 0.03,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     local_pos = foot_pos - env.scene.env_origins[:, None, :]
     x = local_pos[:, :, 0]
-    y = local_pos[:, :, 1]
+    z = local_pos[:, :, 2]
     x_cycle_length = x_flat_length + groove_width
-    y_cycle_length = y_flat_length + groove_width
     x_phase = torch.remainder(x + 0.5 * x_cycle_length, x_cycle_length)
-    y_phase = torch.remainder(y + 0.5 * y_cycle_length, y_cycle_length)
+    x_groove_index = torch.floor((x + 0.5 * x_cycle_length) / x_cycle_length).long()
     in_x_groove = x_phase >= x_flat_length
-    in_y_groove = y_phase >= y_flat_length
-    in_groove = in_x_groove | in_y_groove
+    if skip_every_n_groove > 0:
+        in_x_groove &= torch.remainder(x_groove_index + 1, skip_every_n_groove) != 0
+    in_groove = in_x_groove
     on_flat = ~in_groove
-    return on_flat, in_groove
+    above_groove_bottom = in_groove & (z > -groove_depth + bottom_margin) & (z < 0.0)
+    near_groove_bottom = in_groove & (z <= -groove_depth + bottom_margin)
+    return on_flat, in_groove, above_groove_bottom, near_groove_bottom
 
 
 def broken_bridge_feet_on_blocks(
     env: ManagerBasedRLEnv,
     x_flat_length: float,
-    y_flat_length: float,
     groove_width: float,
+    groove_depth: float,
+    skip_every_n_groove: int,
     asset_cfg: SceneEntityCfg,
     sensor_cfg: SceneEntityCfg,
     command_name: str,
@@ -277,12 +282,13 @@ def broken_bridge_feet_on_blocks(
     asset: RigidObject = env.scene[asset_cfg.name]
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     contacts = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
-    on_flat, _ = _broken_bridge_masks(
+    on_flat, _, _, _ = _broken_bridge_masks(
         env,
         asset.data.body_pos_w[:, asset_cfg.body_ids, :],
         x_flat_length,
-        y_flat_length,
         groove_width,
+        groove_depth,
+        skip_every_n_groove,
     )
     reward = torch.sum((contacts & on_flat).float(), dim=1) / max(len(asset_cfg.body_ids), 1)
     reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
@@ -293,8 +299,9 @@ def broken_bridge_feet_on_blocks(
 def broken_bridge_feet_in_gap(
     env: ManagerBasedRLEnv,
     x_flat_length: float,
-    y_flat_length: float,
     groove_width: float,
+    groove_depth: float,
+    skip_every_n_groove: int,
     asset_cfg: SceneEntityCfg,
     sensor_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
@@ -302,14 +309,103 @@ def broken_bridge_feet_in_gap(
     asset: RigidObject = env.scene[asset_cfg.name]
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     contacts = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
-    _, in_groove = _broken_bridge_masks(
+    _, in_groove, _, _ = _broken_bridge_masks(
         env,
         asset.data.body_pos_w[:, asset_cfg.body_ids, :],
         x_flat_length,
-        y_flat_length,
         groove_width,
+        groove_depth,
+        skip_every_n_groove,
     )
     penalty = torch.sum((contacts & in_groove).float(), dim=1) / max(len(asset_cfg.body_ids), 1)
+    penalty *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return penalty
+
+
+def broken_bridge_feet_above_groove(
+    env: ManagerBasedRLEnv,
+    x_flat_length: float,
+    groove_width: float,
+    groove_depth: float,
+    skip_every_n_groove: int,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize feet entering a groove without touching the bottom."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    _, _, above_bottom, _ = _broken_bridge_masks(
+        env,
+        asset.data.body_pos_w[:, asset_cfg.body_ids, :],
+        x_flat_length,
+        groove_width,
+        groove_depth,
+        skip_every_n_groove,
+    )
+    penalty = torch.sum(above_bottom.float(), dim=1) / max(len(asset_cfg.body_ids), 1)
+    penalty *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return penalty
+
+
+class BrokenBridgeFeetRecoveryReward(ManagerTermBase):
+    """Reward feet that move from a groove back to the flat top surface."""
+
+    def __init__(self, cfg: RewTerm, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        asset_cfg: SceneEntityCfg = cfg.params["asset_cfg"]
+        self.was_in_groove = torch.zeros(env.num_envs, len(asset_cfg.body_ids), device=env.device, dtype=torch.bool)
+
+    def reset(self, env_ids: torch.Tensor | None = None):
+        if env_ids is None:
+            self.was_in_groove.zero_()
+        else:
+            self.was_in_groove[env_ids] = False
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        x_flat_length: float,
+        groove_width: float,
+        groove_depth: float,
+        skip_every_n_groove: int,
+        asset_cfg: SceneEntityCfg,
+    ) -> torch.Tensor:
+        asset: RigidObject = env.scene[asset_cfg.name]
+        on_flat, in_groove, _, _ = _broken_bridge_masks(
+            env,
+            asset.data.body_pos_w[:, asset_cfg.body_ids, :],
+            x_flat_length,
+            groove_width,
+            groove_depth,
+            skip_every_n_groove,
+        )
+        recovered = self.was_in_groove & on_flat
+        reward = torch.sum(recovered.float(), dim=1) / max(len(asset_cfg.body_ids), 1)
+        self.was_in_groove = in_groove
+        reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+        return reward
+
+
+def broken_bridge_feet_bottom_contact(
+    env: ManagerBasedRLEnv,
+    x_flat_length: float,
+    groove_width: float,
+    groove_depth: float,
+    skip_every_n_groove: int,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize feet contacting the bottom of active grooves."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contacts = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+    _, _, _, near_bottom = _broken_bridge_masks(
+        env,
+        asset.data.body_pos_w[:, asset_cfg.body_ids, :],
+        x_flat_length,
+        groove_width,
+        groove_depth,
+        skip_every_n_groove,
+    )
+    penalty = torch.sum((contacts & near_bottom).float(), dim=1) / max(len(asset_cfg.body_ids), 1)
     penalty *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return penalty
 

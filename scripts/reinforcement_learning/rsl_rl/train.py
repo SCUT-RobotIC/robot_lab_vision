@@ -137,6 +137,12 @@ def resolve_resume_path(log_root_path: str, load_run: str | None, load_checkpoin
     return get_checkpoint_path(log_root_path, load_run, load_checkpoint)
 
 
+def get_load_log_root_path(agent_cfg: RslRlBaseRunnerCfg) -> str:
+    """Get the experiment folder used for checkpoint loading."""
+    load_experiment_name = getattr(agent_cfg, "load_experiment_name", None) or agent_cfg.experiment_name
+    return os.path.abspath(os.path.join("logs", "rsl_rl", load_experiment_name))
+
+
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
     """Train with RSL-RL agent."""
@@ -204,7 +210,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # save resume path before creating a new log_dir
     if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
-        resume_path = resolve_resume_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        load_log_root_path = get_load_log_root_path(agent_cfg)
+        resume_path = resolve_resume_path(load_log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     # wrap for video recording
     if args_cli.video:

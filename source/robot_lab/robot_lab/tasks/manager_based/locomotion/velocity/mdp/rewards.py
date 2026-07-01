@@ -142,6 +142,25 @@ def body_x_alignment(
     return reward
 
 
+def body_x_alignment_with_initial_yaw(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward keeping the robot body's forward axis aligned with its reset yaw target."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    forward_b = torch.zeros(env.num_envs, 3, device=env.device)
+    forward_b[:, 0] = 1.0
+    forward_w = math_utils.quat_apply(asset.data.root_quat_w, forward_b)
+
+    target_yaw = getattr(env, "_cardinal_yaw_target", torch.zeros(env.num_envs, device=env.device))
+    target_forward = torch.stack((torch.cos(target_yaw), torch.sin(target_yaw)), dim=1)
+    alignment = torch.sum(forward_w[:, :2] * target_forward, dim=1)
+    reward = torch.clamp(alignment, min=-1.0, max=1.0)
+    reward = 0.5 * (reward + 1.0)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
 def track_lin_vel_xy_exp_wall_contact_tolerant(
     env: ManagerBasedRLEnv,
     std: float,
@@ -162,6 +181,102 @@ def track_lin_vel_xy_exp_wall_contact_tolerant(
     body_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
     near_wall_contact = torch.any(
         (torch.abs(body_pos[:, :, 0] - wall_x) < approach_distance) & (contact_forces > contact_threshold),
+        dim=1,
+    )
+
+    command = env.command_manager.get_command(command_name)[:, :2]
+    actual = asset.data.root_lin_vel_b[:, :2]
+    target_x = command[:, 0]
+    actual_x = actual[:, 0]
+    relaxed_x = target_x * slowdown_factor
+
+    normal_x_error = target_x - actual_x
+    contact_x_error = torch.clamp(relaxed_x - actual_x, min=0.0) + torch.clamp(actual_x - target_x, min=0.0)
+    x_error = torch.where(near_wall_contact, contact_x_error, normal_x_error)
+    y_error = command[:, 1] - actual[:, 1]
+
+    lin_vel_error = torch.square(x_error) + torch.square(y_error)
+    reward = torch.exp(-lin_vel_error / std**2)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def _low_wall_tensor(values: tuple[float, ...], env: ManagerBasedRLEnv) -> torch.Tensor:
+    return torch.tensor(values, device=env.device, dtype=torch.float32)
+
+
+def _low_wall_nearest_distance(x: torch.Tensor, wall_xs: tuple[float, ...], env: ManagerBasedRLEnv) -> torch.Tensor:
+    wall_xs_tensor = _low_wall_tensor(wall_xs, env)
+    return torch.min(torch.abs(x.unsqueeze(-1) - wall_xs_tensor), dim=-1)[0]
+
+
+def _low_wall_square_nearest_distance(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    wall_half_lengths: tuple[float, ...],
+    env: ManagerBasedRLEnv,
+    extent_margin: float,
+) -> torch.Tensor:
+    wall_half_lengths_tensor = _low_wall_tensor(wall_half_lengths, env)
+    half_lengths = wall_half_lengths_tensor.view(*([1] * x.ndim), -1)
+    x_expanded = x.unsqueeze(-1)
+    y_expanded = y.unsqueeze(-1)
+
+    x_wall_distance = torch.abs(torch.abs(x_expanded) - half_lengths)
+    x_wall_valid = torch.abs(y_expanded) <= half_lengths + extent_margin
+    y_wall_distance = torch.abs(torch.abs(y_expanded) - half_lengths)
+    y_wall_valid = torch.abs(x_expanded) <= half_lengths + extent_margin
+
+    large_distance = torch.full_like(x_wall_distance, 1.0e6)
+    square_distance = torch.minimum(
+        torch.where(x_wall_valid, x_wall_distance, large_distance),
+        torch.where(y_wall_valid, y_wall_distance, large_distance),
+    )
+    return torch.min(square_distance, dim=-1)[0]
+
+
+def _low_wall_nearest_height(
+    x: torch.Tensor,
+    wall_xs: tuple[float, ...],
+    wall_heights: tuple[float, ...],
+    env: ManagerBasedRLEnv,
+) -> torch.Tensor:
+    wall_xs_tensor = _low_wall_tensor(wall_xs, env)
+    wall_heights_tensor = _low_wall_tensor(wall_heights, env)
+    nearest_ids = torch.argmin(torch.abs(x.unsqueeze(-1) - wall_xs_tensor), dim=-1)
+    return wall_heights_tensor[nearest_ids]
+
+
+def track_lin_vel_xy_exp_concentric_wall_contact_tolerant(
+    env: ManagerBasedRLEnv,
+    std: float,
+    command_name: str,
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg,
+    wall_half_lengths: tuple[float, ...],
+    approach_distance: float,
+    contact_threshold: float,
+    slowdown_factor: float,
+) -> torch.Tensor:
+    """Track commanded xy velocity, allowing lower x speed during contacts near any forward wall."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    contact_forces = torch.max(torch.norm(contact_forces, dim=-1), dim=1)[0]
+    body_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+    near_wall_contact = torch.any(
+        (
+            _low_wall_square_nearest_distance(
+                body_pos[:, :, 0],
+                body_pos[:, :, 1],
+                wall_half_lengths,
+                env,
+                approach_distance,
+            )
+            < approach_distance
+        )
+        & (contact_forces > contact_threshold),
         dim=1,
     )
 
@@ -204,6 +319,37 @@ def low_wall_body_contact_penalty(
     return torch.clamp((contact_force - threshold) / max_force, min=0.0, max=1.0)
 
 
+def concentric_low_wall_body_contact_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    threshold: float,
+    max_force: float,
+    asset_cfg: SceneEntityCfg | None = None,
+    wall_half_lengths: tuple[float, ...] | None = None,
+    approach_distance: float | None = None,
+) -> torch.Tensor:
+    """Penalize selected robot bodies receiving contact forces near any forward wall."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    net_contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    contact_force = torch.max(torch.norm(net_contact_forces, dim=-1), dim=1)[0]
+    if asset_cfg is not None and wall_half_lengths is not None and approach_distance is not None:
+        asset: RigidObject = env.scene[asset_cfg.name]
+        body_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+        near_wall = (
+            _low_wall_square_nearest_distance(
+                body_pos[:, :, 0],
+                body_pos[:, :, 1],
+                wall_half_lengths,
+                env,
+                approach_distance,
+            )
+            < approach_distance
+        )
+        contact_force = contact_force * near_wall.float()
+    contact_force = torch.max(contact_force, dim=1)[0]
+    return torch.clamp((contact_force - threshold) / max_force, min=0.0, max=1.0)
+
+
 def low_wall_progress(
     env: ManagerBasedRLEnv,
     wall_x: float,
@@ -214,6 +360,25 @@ def low_wall_progress(
     asset: RigidObject = env.scene[asset_cfg.name]
     root_x = asset.data.root_pos_w[:, 0] - env.scene.env_origins[:, 0]
     progress = (root_x - wall_x + finish_distance) / (2.0 * finish_distance)
+    reward = torch.clamp(progress, min=0.0, max=1.0)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def concentric_low_wall_progress(
+    env: ManagerBasedRLEnv,
+    wall_xs: tuple[float, ...],
+    finish_distance: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward progress through the wall sequence along the reset yaw direction."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    root_xy = asset.data.root_pos_w[:, :2] - env.scene.env_origins[:, :2]
+    target_yaw = getattr(env, "_cardinal_yaw_target", torch.zeros(env.num_envs, device=env.device))
+    target_forward = torch.stack((torch.cos(target_yaw), torch.sin(target_yaw)), dim=1)
+    forward_pos = torch.sum(root_xy * target_forward, dim=1)
+    final_wall_x = max(wall_xs)
+    progress = (forward_pos + finish_distance) / (final_wall_x + finish_distance)
     reward = torch.clamp(progress, min=0.0, max=1.0)
     reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
@@ -236,6 +401,35 @@ def low_wall_feet_clearance(
     in_air = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids] > 0.0
     wall_height = getattr(env, "_low_wall_height", torch.full((env.num_envs,), 0.15, device=env.device))
     target = wall_height.unsqueeze(1) + margin
+    clearance = torch.clamp((foot_pos[:, :, 2] - target) / margin, min=0.0, max=1.0)
+    reward = torch.sum(clearance * near_wall.float() * in_air.float(), dim=1) / max(len(asset_cfg.body_ids), 1)
+    reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def concentric_low_wall_feet_clearance(
+    env: ManagerBasedRLEnv,
+    wall_xs: tuple[float, ...],
+    wall_heights: tuple[float, ...],
+    approach_distance: float,
+    margin: float,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    command_name: str,
+) -> torch.Tensor:
+    """Reward swing feet clearing the nearest wall along the reset yaw direction."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    foot_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+    target_yaw = getattr(env, "_cardinal_yaw_target", torch.zeros(env.num_envs, device=env.device))
+    target_forward = torch.stack((torch.cos(target_yaw), torch.sin(target_yaw)), dim=1)
+    foot_forward_pos = torch.sum(foot_pos[:, :, :2] * target_forward[:, None, :], dim=-1)
+    wall_distance = _low_wall_nearest_distance(foot_forward_pos, wall_xs, env)
+    near_wall = wall_distance < approach_distance
+    in_air = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids] > 0.0
+    wall_height = _low_wall_nearest_height(foot_forward_pos, wall_xs, wall_heights, env)
+    target = wall_height + margin
     clearance = torch.clamp((foot_pos[:, :, 2] - target) / margin, min=0.0, max=1.0)
     reward = torch.sum(clearance * near_wall.float() * in_air.float(), dim=1) / max(len(asset_cfg.body_ids), 1)
     reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
@@ -654,6 +848,28 @@ def joint_mirror(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, mirror_joint
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     #可作为一个统一的对站立姿态的考量，即该项奖励在站立或运动（水平）时考量的多，若是斜这则放松
     return reward
+
+
+def low_wall_flat_joint_mirror(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    mirror_joints: list[list[str]],
+    wall_half_lengths: tuple[float, ...],
+    flat_distance: float,
+) -> torch.Tensor:
+    """Apply joint mirror regularization away from any square-wall approach zone."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    mirror_reward = joint_mirror(env, asset_cfg, mirror_joints)
+    root_pos = asset.data.root_pos_w - env.scene.env_origins
+    wall_distance = _low_wall_square_nearest_distance(
+        root_pos[:, 0],
+        root_pos[:, 1],
+        wall_half_lengths,
+        env,
+        flat_distance,
+    )
+    on_flat = wall_distance > flat_distance
+    return mirror_reward * on_flat.float()
 
 
 def action_mirror(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, mirror_joints: list[list[str]]) -> torch.Tensor:

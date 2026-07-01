@@ -127,6 +127,12 @@ def resolve_resume_path(log_root_path: str, load_run: str | None, load_checkpoin
     return get_checkpoint_path(log_root_path, load_run, load_checkpoint)
 
 
+def get_load_log_root_path(agent_cfg: RslRlBaseRunnerCfg) -> str:
+    """Get the experiment folder used for checkpoint loading."""
+    load_experiment_name = getattr(agent_cfg, "load_experiment_name", None) or agent_cfg.experiment_name
+    return os.path.abspath(os.path.join("logs", "rsl_rl", load_experiment_name))
+
+
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
     """Play with RSL-RL agent."""
@@ -214,8 +220,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         )
 
     # specify directory for logging experiments
-    log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
-    log_root_path = os.path.abspath(log_root_path)
+    log_root_path = get_load_log_root_path(agent_cfg)
     print(f"[INFO] Loading experiment from directory: {log_root_path}")
     if args_cli.use_pretrained_checkpoint:
         resume_path = get_published_pretrained_checkpoint("rsl_rl", task_name)

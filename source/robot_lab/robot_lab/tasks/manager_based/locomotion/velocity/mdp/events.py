@@ -46,6 +46,57 @@ def reset_low_wall_position(
     env._low_wall_height[env_ids] = height
 
 
+def reset_root_state_cardinal_yaw(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    pose_range: dict[str, tuple[float, float]],
+    velocity_range: dict[str, tuple[float, float]],
+    yaw_choices: tuple[float, ...],
+    yaw_jitter_range: tuple[float, float] = (0.0, 0.0),
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset root state with yaw sampled from a discrete set of cardinal directions."""
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+    if env_ids is None or isinstance(env_ids, slice):
+        env_ids = torch.arange(env.scene.num_envs, device=env.device)
+    elif not isinstance(env_ids, torch.Tensor):
+        env_ids = torch.tensor(env_ids, device=env.device)
+    else:
+        env_ids = env_ids.to(device=env.device)
+
+    root_states = asset.data.default_root_state[env_ids].clone()
+
+    range_list = [pose_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch"]]
+    ranges = torch.tensor(range_list, device=asset.device)
+    rand_pose = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 5), device=asset.device)
+
+    yaw_options = torch.tensor(yaw_choices, device=asset.device)
+    yaw_ids = torch.randint(0, len(yaw_choices), (len(env_ids),), device=asset.device)
+    yaw_jitter = math_utils.sample_uniform(
+        yaw_jitter_range[0],
+        yaw_jitter_range[1],
+        (len(env_ids),),
+        device=asset.device,
+    )
+    yaw = yaw_options[yaw_ids] + yaw_jitter
+
+    if not hasattr(env, "_cardinal_yaw_target"):
+        env._cardinal_yaw_target = torch.zeros(env.scene.num_envs, device=env.device)
+    env._cardinal_yaw_target[env_ids] = yaw
+
+    positions = root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_pose[:, 0:3]
+    orientations_delta = math_utils.quat_from_euler_xyz(rand_pose[:, 3], rand_pose[:, 4], yaw)
+    orientations = math_utils.quat_mul(root_states[:, 3:7], orientations_delta)
+
+    range_list = [velocity_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
+    ranges = torch.tensor(range_list, device=asset.device)
+    rand_vel = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+    velocities = root_states[:, 7:13] + rand_vel
+
+    asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=env_ids)
+    asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
+
+
 def randomize_rigid_body_inertia(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor | None,

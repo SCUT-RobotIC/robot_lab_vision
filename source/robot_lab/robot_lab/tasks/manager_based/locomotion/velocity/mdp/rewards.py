@@ -437,6 +437,77 @@ def concentric_low_wall_feet_clearance(
     return reward
 
 
+def concentric_low_wall_all_feet_crossing(
+    env: ManagerBasedRLEnv,
+    wall_xs: tuple[float, ...],
+    completion_distance: float,
+    foot_margin: float,
+    lag_tolerance: float,
+    asset_cfg: SceneEntityCfg,
+    command_name: str,
+) -> torch.Tensor:
+    """Reward all feet clearing the wall after the base has crossed it."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    root_xy = asset.data.root_pos_w[:, :2] - env.scene.env_origins[:, :2]
+    foot_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+
+    target_yaw = getattr(env, "_cardinal_yaw_target", torch.zeros(env.num_envs, device=env.device))
+    target_forward = torch.stack((torch.cos(target_yaw), torch.sin(target_yaw)), dim=1)
+    root_forward_pos = torch.sum(root_xy * target_forward, dim=1)
+    foot_forward_pos = torch.sum(foot_pos[:, :, :2] * target_forward[:, None, :], dim=-1)
+    trailing_foot_pos = torch.min(foot_forward_pos, dim=1)[0]
+
+    wall_xs_tensor = _low_wall_tensor(wall_xs, env)
+    crossed_walls = root_forward_pos.unsqueeze(-1) >= wall_xs_tensor
+    wall_positions = wall_xs_tensor.unsqueeze(0).expand(root_forward_pos.shape[0], -1)
+    crossed_wall_pos = torch.where(crossed_walls, wall_positions, torch.full_like(wall_positions, -1.0e6))
+    current_wall = torch.max(crossed_wall_pos, dim=1)[0]
+    has_crossed_wall = current_wall > -1.0e5
+    in_completion_zone = root_forward_pos <= current_wall + completion_distance
+    active = has_crossed_wall & in_completion_zone
+
+    target_foot_pos = current_wall + foot_margin
+    crossing_reward = torch.clamp((trailing_foot_pos - current_wall) / foot_margin, min=0.0, max=1.0)
+    trailing_penalty = torch.clamp((target_foot_pos - trailing_foot_pos) / lag_tolerance, min=0.0, max=1.0)
+    reward = crossing_reward - trailing_penalty
+
+    reward *= active.float()
+    reward *= (torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1).float()
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def concentric_low_wall_final_wall_bonus(
+    env: ManagerBasedRLEnv,
+    final_wall_x: float,
+    margin: float,
+    asset_cfg: SceneEntityCfg,
+    command_name: str,
+) -> torch.Tensor:
+    """Give a one-time bonus when the base and all feet fully clear the final wall."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    if not hasattr(env, "_low_wall_final_bonus_claimed"):
+        env._low_wall_final_bonus_claimed = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+
+    reset_envs = env.episode_length_buf == 0
+    env._low_wall_final_bonus_claimed[reset_envs] = False
+
+    root_xy = asset.data.root_pos_w[:, :2] - env.scene.env_origins[:, :2]
+    foot_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+    target_yaw = getattr(env, "_cardinal_yaw_target", torch.zeros(env.num_envs, device=env.device))
+    target_forward = torch.stack((torch.cos(target_yaw), torch.sin(target_yaw)), dim=1)
+    root_forward_pos = torch.sum(root_xy * target_forward, dim=1)
+    foot_forward_pos = torch.sum(foot_pos[:, :, :2] * target_forward[:, None, :], dim=-1)
+    trailing_foot_pos = torch.min(foot_forward_pos, dim=1)[0]
+
+    success = (root_forward_pos > final_wall_x + margin) & (trailing_foot_pos > final_wall_x + margin)
+    moving = torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
+    upright = -asset.data.projected_gravity_b[:, 2] > 0.5
+    new_success = success & moving & upright & ~env._low_wall_final_bonus_claimed
+    env._low_wall_final_bonus_claimed |= new_success
+    return new_success.float()
+
+
 def _broken_bridge_masks(
     env: ManagerBasedRLEnv,
     foot_pos: torch.Tensor,

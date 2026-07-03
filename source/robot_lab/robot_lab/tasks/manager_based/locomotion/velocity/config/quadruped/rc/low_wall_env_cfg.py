@@ -67,12 +67,12 @@ class RCLowWallEnvCfg(RCRoughStonesEnvCfg):
         self.episode_length_s = 30.0
         
         # ------------------------------Commands------------------------------
-        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.75)
+        self.commands.base_velocity.ranges.lin_vel_x = (0.3, 0.75)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
         self.commands.base_velocity.ranges.heading = None
         self.commands.base_velocity.heading_command = False
-        self.commands.base_velocity.rel_standing_envs = 0.0
+        self.commands.base_velocity.rel_standing_envs = 0.05
         self.commands.base_velocity.rel_heading_envs = 0.0
 
         # ------------------------------Events------------------------------
@@ -159,7 +159,7 @@ class RCLowWallEnvCfg(RCRoughStonesEnvCfg):
         self.rewards.upward.weight = 0.25
         self.rewards.body_x_alignment = RewTerm(
             func=mdp.body_x_alignment_with_initial_yaw,
-            weight=2.0,
+            weight=3.0,
             params={"asset_cfg": SceneEntityCfg("robot")},
         )
         self.rewards.low_wall_progress = RewTerm(
@@ -181,6 +181,28 @@ class RCLowWallEnvCfg(RCRoughStonesEnvCfg):
                 "margin": 0.06,
                 "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
                 "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[self.foot_link_name]),
+                "command_name": "base_velocity",
+            },
+        )
+        self.rewards.low_wall_all_feet_crossing = RewTerm(
+            func=mdp.concentric_low_wall_all_feet_crossing,
+            weight=1.5,
+            params={
+                "wall_xs": self.wall_xs,
+                "completion_distance": 0.65,
+                "foot_margin": 0.08,
+                "lag_tolerance": 0.25,
+                "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
+                "command_name": "base_velocity",
+            },
+        )
+        self.rewards.low_wall_final_wall_bonus = RewTerm(
+            func=mdp.concentric_low_wall_final_wall_bonus,
+            weight=8.0,
+            params={
+                "final_wall_x": self.wall_xs[-1],
+                "margin": 0.10,
+                "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
                 "command_name": "base_velocity",
             },
         )

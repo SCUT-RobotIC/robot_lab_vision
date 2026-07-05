@@ -64,7 +64,7 @@ class RCLowWallEnvCfg(RCRoughStonesEnvCfg):
         self.scene.robot.init_state.pos = (0.0, 0.0, 0.38)
         self.scene.robot.spawn.rigid_props.max_depenetration_velocity = 3.0
         self.terminations.terrain_out_of_bounds.params["distance_buffer"] = 0.4
-        self.episode_length_s = 30.0
+        self.episode_length_s = 45.0
         
         # ------------------------------Commands------------------------------
         self.commands.base_velocity.ranges.lin_vel_x = (0.3, 0.75)
@@ -186,19 +186,35 @@ class RCLowWallEnvCfg(RCRoughStonesEnvCfg):
         )
         self.rewards.low_wall_all_feet_crossing = RewTerm(
             func=mdp.concentric_low_wall_all_feet_crossing,
-            weight=1.5,
+            weight=2.5,
             params={
                 "wall_xs": self.wall_xs,
                 "completion_distance": 0.65,
                 "foot_margin": 0.08,
                 "lag_tolerance": 0.25,
+                "positive_scale": 1.0,
+                "negative_scale": 0.25,
                 "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
+                "command_name": "base_velocity",
+            },
+        )
+        self.rewards.low_wall_fast_crossing = RewTerm(
+            func=mdp.concentric_low_wall_fast_crossing_bonus,
+            weight=3.0,
+            params={
+                "wall_xs": self.wall_xs,
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[f"^(?!.*{self.foot_link_name}).*"]),
+                "asset_cfg": SceneEntityCfg("robot", body_names=[f"^(?!.*{self.foot_link_name}).*"]),
+                "contact_threshold": 5.0,
+                "approach_distance": 0.35,
+                "clear_distance": 0.30,
+                "max_time": 4.0,
                 "command_name": "base_velocity",
             },
         )
         self.rewards.low_wall_final_wall_bonus = RewTerm(
             func=mdp.concentric_low_wall_final_wall_bonus,
-            weight=8.0,
+            weight=12.0,
             params={
                 "final_wall_x": self.wall_xs[-1],
                 "margin": 0.10,

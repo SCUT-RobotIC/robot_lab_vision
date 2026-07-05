@@ -191,7 +191,7 @@ def track_lin_vel_xy_exp_wall_contact_tolerant(
     relaxed_x = target_x * slowdown_factor
 
     normal_x_error = target_x - actual_x
-    contact_x_error = torch.clamp(relaxed_x - actual_x, min=0.0) + torch.clamp(actual_x - target_x, min=0.0)
+    contact_x_error = torch.clamp(relaxed_x - actual_x, min=0.0)
     x_error = torch.where(near_wall_contact, contact_x_error, normal_x_error)
     y_error = command[:, 1] - actual[:, 1]
 
@@ -287,7 +287,7 @@ def track_lin_vel_xy_exp_concentric_wall_contact_tolerant(
     relaxed_x = target_x * slowdown_factor
 
     normal_x_error = target_x - actual_x
-    contact_x_error = torch.clamp(relaxed_x - actual_x, min=0.0) + torch.clamp(actual_x - target_x, min=0.0)
+    contact_x_error = torch.clamp(relaxed_x - actual_x, min=0.0)
     x_error = torch.where(near_wall_contact, contact_x_error, normal_x_error)
     y_error = command[:, 1] - actual[:, 1]
 
@@ -443,6 +443,8 @@ def concentric_low_wall_all_feet_crossing(
     completion_distance: float,
     foot_margin: float,
     lag_tolerance: float,
+    positive_scale: float,
+    negative_scale: float,
     asset_cfg: SceneEntityCfg,
     command_name: str,
 ) -> torch.Tensor:
@@ -469,7 +471,7 @@ def concentric_low_wall_all_feet_crossing(
     target_foot_pos = current_wall + foot_margin
     crossing_reward = torch.clamp((trailing_foot_pos - current_wall) / foot_margin, min=0.0, max=1.0)
     trailing_penalty = torch.clamp((target_foot_pos - trailing_foot_pos) / lag_tolerance, min=0.0, max=1.0)
-    reward = crossing_reward - trailing_penalty
+    reward = positive_scale * crossing_reward - negative_scale * trailing_penalty
 
     reward *= active.float()
     reward *= (torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1).float()
@@ -489,7 +491,7 @@ def concentric_low_wall_final_wall_bonus(
     if not hasattr(env, "_low_wall_final_bonus_claimed"):
         env._low_wall_final_bonus_claimed = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
 
-    reset_envs = env.episode_length_buf == 0
+    reset_envs = env.episode_length_buf <= 1
     env._low_wall_final_bonus_claimed[reset_envs] = False
 
     root_xy = asset.data.root_pos_w[:, :2] - env.scene.env_origins[:, :2]
@@ -506,6 +508,84 @@ def concentric_low_wall_final_wall_bonus(
     new_success = success & moving & upright & ~env._low_wall_final_bonus_claimed
     env._low_wall_final_bonus_claimed |= new_success
     return new_success.float()
+
+
+def concentric_low_wall_fast_crossing_bonus(
+    env: ManagerBasedRLEnv,
+    wall_xs: tuple[float, ...],
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_threshold: float,
+    approach_distance: float,
+    clear_distance: float,
+    max_time: float,
+    command_name: str,
+) -> torch.Tensor:
+    """Reward short duration from first wall contact to the base fully clearing that wall."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    num_walls = len(wall_xs)
+    if not hasattr(env, "_low_wall_fast_cross_start_step"):
+        env._low_wall_fast_cross_start_step = torch.full(
+            (env.num_envs, num_walls),
+            -1,
+            dtype=torch.long,
+            device=env.device,
+        )
+        env._low_wall_fast_cross_claimed = torch.zeros(
+            (env.num_envs, num_walls),
+            dtype=torch.bool,
+            device=env.device,
+        )
+
+    reset_envs = env.episode_length_buf <= 1
+    env._low_wall_fast_cross_start_step[reset_envs, :] = -1
+    env._low_wall_fast_cross_claimed[reset_envs, :] = False
+
+    wall_xs_tensor = _low_wall_tensor(wall_xs, env)
+    root_xy = asset.data.root_pos_w[:, :2] - env.scene.env_origins[:, :2]
+    body_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - env.scene.env_origins[:, None, :]
+    target_yaw = getattr(env, "_cardinal_yaw_target", torch.zeros(env.num_envs, device=env.device))
+    target_forward = torch.stack((torch.cos(target_yaw), torch.sin(target_yaw)), dim=1)
+    target_lateral = torch.stack((-torch.sin(target_yaw), torch.cos(target_yaw)), dim=1)
+
+    body_forward_pos = torch.sum(body_pos[:, :, :2] * target_forward[:, None, :], dim=-1)
+    body_lateral_pos = torch.abs(torch.sum(body_pos[:, :, :2] * target_lateral[:, None, :], dim=-1))
+    wall_positions = wall_xs_tensor.view(1, 1, -1)
+    wall_extent = wall_xs_tensor.view(1, 1, -1) + approach_distance
+    near_forward_wall = (
+        (torch.abs(body_forward_pos.unsqueeze(-1) - wall_positions) < approach_distance)
+        & (body_lateral_pos.unsqueeze(-1) <= wall_extent)
+    )
+
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    contact_forces = torch.max(torch.norm(contact_forces, dim=-1), dim=1)[0]
+    wall_contact = torch.any(near_forward_wall & (contact_forces.unsqueeze(-1) > contact_threshold), dim=1)
+
+    start_step = env.episode_length_buf.unsqueeze(1).expand(-1, num_walls)
+    should_start = (
+        wall_contact
+        & (env._low_wall_fast_cross_start_step < 0)
+        & ~env._low_wall_fast_cross_claimed
+    )
+    env._low_wall_fast_cross_start_step = torch.where(
+        should_start,
+        start_step,
+        env._low_wall_fast_cross_start_step,
+    )
+
+    root_forward_pos = torch.sum(root_xy * target_forward, dim=1)
+    completed = root_forward_pos.unsqueeze(1) > wall_xs_tensor.unsqueeze(0) + clear_distance
+    started = env._low_wall_fast_cross_start_step >= 0
+    moving = torch.linalg.norm(env.command_manager.get_command(command_name), dim=1).unsqueeze(1) > 0.1
+    upright = (-asset.data.projected_gravity_b[:, 2] > 0.5).unsqueeze(1)
+    new_completion = completed & started & moving & upright & ~env._low_wall_fast_cross_claimed
+
+    elapsed_time = (start_step - env._low_wall_fast_cross_start_step).float() * env.step_dt
+    score = torch.clamp((max_time - elapsed_time) / max_time, min=0.0, max=1.0)
+    reward = torch.sum(torch.where(new_completion, score, torch.zeros_like(score)), dim=1)
+    env._low_wall_fast_cross_claimed |= new_completion
+    return reward
 
 
 def _broken_bridge_masks(

@@ -61,13 +61,24 @@ class RCBrokenBridgeEnvCfg(RCRoughStonesEnvCfg):
         self.scene.robot.init_state.pos = (self.start_x, 0.0, 0.34)
 
         # ------------------------------Commands------------------------------
-        self.commands.base_velocity.ranges.lin_vel_x = (0.25, 0.65)
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.25, 0.25)
-        self.commands.base_velocity.ranges.ang_vel_z = (-0.5, 0.5)
-        self.commands.base_velocity.ranges.heading = None
-        self.commands.base_velocity.heading_command = False
-        self.commands.base_velocity.rel_standing_envs = 0.0
-        self.commands.base_velocity.rel_heading_envs = 0.0
+        self.commands.base_velocity = mdp.BrokenBridgeVelocityCommandCfg(
+            asset_name="robot",
+            resampling_time_range=(5.0, 15.0),
+            heading_command=False,
+            rel_standing_envs=0.0,
+            rel_heading_envs=0.0,
+            debug_vis=True,
+            forward_only_prob=0.70,
+            turn_in_place_prob=0.25,
+            standing_prob=0.05,
+            min_turn_abs_ang_vel_z=0.2,
+            ranges=mdp.BrokenBridgeVelocityCommandCfg.Ranges(
+                lin_vel_x=(0.25, 0.65),
+                lin_vel_y=(0.0, 0.0),
+                ang_vel_z=(-0.5, 0.5),
+                heading=None,
+            ),
+        )
 
         # ------------------------------Events------------------------------
         self.events.randomize_reset_base.params = {

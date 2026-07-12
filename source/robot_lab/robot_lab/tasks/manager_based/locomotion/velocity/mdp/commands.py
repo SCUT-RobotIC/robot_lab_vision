@@ -63,6 +63,85 @@ class UniformThresholdVelocityCommandCfg(mdp.UniformVelocityCommandCfg):
     #创建与自定义命令生成器对应的配置类
 
 
+class BrokenBridgeVelocityCommand(UniformThresholdVelocityCommand):
+    """Velocity command sampler for broken-bridge training.
+
+    It samples one of three mutually exclusive command modes:
+    forward-only, turn-in-place, or stand-still.
+    """
+
+    cfg: BrokenBridgeVelocityCommandCfg
+
+    def __init__(self, cfg: BrokenBridgeVelocityCommandCfg, env: ManagerBasedEnv):
+        super().__init__(cfg, env)
+        command_prob = self.cfg.forward_only_prob + self.cfg.turn_in_place_prob + self.cfg.standing_prob
+        if command_prob <= 0.0:
+            raise ValueError("At least one broken-bridge command probability must be positive.")
+
+    def _resample_command(self, env_ids: Sequence[int]):
+        if isinstance(env_ids, slice):
+            env_ids = torch.arange(self.num_envs, device=self.device)
+        elif not isinstance(env_ids, torch.Tensor):
+            env_ids = torch.tensor(env_ids, device=self.device)
+
+        num_envs = len(env_ids)
+        if num_envs == 0:
+            return
+
+        total_prob = self.cfg.forward_only_prob + self.cfg.turn_in_place_prob + self.cfg.standing_prob
+        forward_cutoff = self.cfg.forward_only_prob / total_prob
+        turn_cutoff = (self.cfg.forward_only_prob + self.cfg.turn_in_place_prob) / total_prob
+
+        mode_sample = torch.rand(num_envs, device=self.device)
+        forward_envs = env_ids[mode_sample < forward_cutoff]
+        turn_envs = env_ids[(mode_sample >= forward_cutoff) & (mode_sample < turn_cutoff)]
+        standing_envs = env_ids[mode_sample >= turn_cutoff]
+
+        self.vel_command_b[env_ids, :] = 0.0
+        self.is_heading_env[env_ids] = False
+        self.is_standing_env[env_ids] = False
+        self.is_standing_env[standing_envs] = True
+
+        if len(forward_envs) > 0:
+            self.vel_command_b[forward_envs, 0] = torch.empty(len(forward_envs), device=self.device).uniform_(
+                *self.cfg.ranges.lin_vel_x
+            )
+
+        if len(turn_envs) > 0:
+            ang_vel = torch.empty(len(turn_envs), device=self.device).uniform_(*self.cfg.ranges.ang_vel_z)
+            min_abs_ang_vel = self.cfg.min_turn_abs_ang_vel_z
+            if min_abs_ang_vel > 0.0 and self.cfg.ranges.ang_vel_z[0] < 0.0 < self.cfg.ranges.ang_vel_z[1]:
+                small_turn = ang_vel.abs() < min_abs_ang_vel
+                if small_turn.any():
+                    num_small_turn = int(small_turn.sum().item())
+                    random_sign = torch.where(
+                        torch.rand(num_small_turn, device=self.device) < 0.5,
+                        -torch.ones(num_small_turn, device=self.device),
+                        torch.ones(num_small_turn, device=self.device),
+                    )
+                    ang_vel[small_turn] = random_sign * min_abs_ang_vel
+            self.vel_command_b[turn_envs, 2] = ang_vel
+
+
+@configclass
+class BrokenBridgeVelocityCommandCfg(UniformThresholdVelocityCommandCfg):
+    """Configuration for broken-bridge command mode probabilities."""
+
+    class_type: type = BrokenBridgeVelocityCommand
+
+    forward_only_prob: float = 0.70
+    """Probability of sampling a forward-only command: vx > 0, vy = 0, wz = 0."""
+
+    turn_in_place_prob: float = 0.25
+    """Probability of sampling a turn-in-place command: vx = 0, vy = 0, wz != 0."""
+
+    standing_prob: float = 0.05
+    """Probability of sampling a stand-still command: vx = 0, vy = 0, wz = 0."""
+
+    min_turn_abs_ang_vel_z: float = 0.0
+    """Minimum absolute yaw-rate command for turn-in-place samples when the yaw range crosses zero."""
+
+
 class LowBarVelocityCommand(UniformThresholdVelocityCommand):
     """Velocity command that aligns initial yaw so the sampled velocity points at the low bar."""
 

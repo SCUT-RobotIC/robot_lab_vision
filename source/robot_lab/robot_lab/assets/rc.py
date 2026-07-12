@@ -25,7 +25,7 @@ RC_CFG = ArticulationCfg(
         fix_base=False,#是否浮动基
         merge_fixed_joints=False,
         replace_cylinders_with_capsules=False,#圆柱碰撞体积是否更改为胶囊体积
-        asset_path=f"{ISAACLAB_ASSETS_DATA_DIR}/Robots/RC/dog urdf v2/urdf/dog urdf v2.urdf",
+        asset_path=f"{ISAACLAB_ASSETS_DATA_DIR}/Robots/RC/dog urdf/urdf/dog.urdf",
         
         #通过在data中配置urdf，在assets中配置CFG文件，不通过launch修改
         

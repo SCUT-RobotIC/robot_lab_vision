@@ -87,7 +87,8 @@ class RCBrokenBridgePPORunnerCfg(RCRoughPPORunnerCfg):
 
         self.max_iterations = 16000
         self.experiment_name = "rc_broken_bridge"
-        self.load_run = ".*"
-        self.load_checkpoint = "model_.*.pt"
+        self.load_experiment_name = "rc_rough_stones"
+        self.load_run = "2026-06-24_13-15-26"
+        self.load_checkpoint = "model_19999.pt"
         self.policy.actor_hidden_dims = [512, 256, 128]
         self.policy.critic_hidden_dims = [512, 256, 128]

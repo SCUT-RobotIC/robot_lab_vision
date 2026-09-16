@@ -127,6 +127,55 @@ def low_bar_contact_penalty(
     return torch.clamp((contact_force - threshold) / max_force, min=0.0, max=1.0)
 
 
+def _feet_contact_mask(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    contact_force_threshold: float,
+) -> torch.Tensor:
+    """Return the contact state of each selected foot over the sensor history."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    return contact_forces.norm(dim=-1).max(dim=1)[0] > contact_force_threshold
+
+
+def stance_hip_zero_reward(
+    env: ManagerBasedRLEnv,
+    std: float,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    contact_force_threshold: float = 1.0,
+) -> torch.Tensor:
+    """Reward each stance leg for keeping its hip joint close to zero radians."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    contacts = _feet_contact_mask(env, sensor_cfg, contact_force_threshold)
+    if joint_pos.shape[1] != contacts.shape[1]:
+        raise ValueError("stance_hip_zero_reward requires one selected hip joint per selected foot")
+
+    per_leg_reward = torch.exp(-torch.square(joint_pos / std))
+    return torch.sum(per_leg_reward * contacts, dim=1) / joint_pos.shape[1]
+
+
+def stance_calf_singularity_penalty(
+    env: ManagerBasedRLEnv,
+    singularity_angle: float,
+    std: float,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    contact_force_threshold: float = 1.0,
+) -> torch.Tensor:
+    """Penalize stance-leg calf joints near a linkage singularity."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    contacts = _feet_contact_mask(env, sensor_cfg, contact_force_threshold)
+    if joint_pos.shape[1] != contacts.shape[1]:
+        raise ValueError("stance_calf_singularity_penalty requires one selected calf joint per selected foot")
+
+    distance = (joint_pos - singularity_angle) / std
+    per_leg_penalty = torch.exp(-torch.square(distance))
+    return torch.sum(per_leg_penalty * contacts, dim=1) / joint_pos.shape[1]
+
+
 def body_x_alignment(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),

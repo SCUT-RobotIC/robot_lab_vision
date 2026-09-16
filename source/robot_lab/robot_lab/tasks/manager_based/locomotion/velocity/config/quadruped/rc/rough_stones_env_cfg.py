@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import isaaclab.terrains as terrain_gen
+from isaaclab.managers import RewardTermCfg as RewTerm
+from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
+import robot_lab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from robot_lab.tasks.manager_based.locomotion.velocity.mdp.stony_road import HfStonyRoadTerrainCfg
 
 from .rough_env_cfg import RCRoughEnvCfg
-
 
 RC_STONY_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     size=(8.0, 8.0),
@@ -137,6 +139,42 @@ class RCRoughStonesEnvCfg(RCRoughEnvCfg):
         self.rewards.feet_height_body.params["target_height"] = -0.22
         self.rewards.feet_height_body.params["asset_cfg"].body_names = [self.foot_link_name]
         self.rewards.upward.weight = 0.35
+
+        leg_order = ("FR", "FL", "RR", "RL")
+        feet_cfg = SceneEntityCfg(
+            "contact_forces",
+            body_names=[f"{leg}_feet_link" for leg in leg_order],
+            preserve_order=True,
+        )
+        self.rewards.stance_hip_zero = RewTerm(
+            func=mdp.stance_hip_zero_reward,
+            weight=1.0,
+            params={
+                "std": 0.25,
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[f"{leg}_hip_joint" for leg in leg_order],
+                    preserve_order=True,
+                ),
+                "sensor_cfg": feet_cfg,
+                "contact_force_threshold": 1.0,
+            },
+        )
+        self.rewards.stance_calf_singularity = RewTerm(
+            func=mdp.stance_calf_singularity_penalty,
+            weight=-1.0,
+            params={
+                "singularity_angle": -1.25,
+                "std": 0.15,
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[f"{leg}_calf_joint" for leg in leg_order],
+                    preserve_order=True,
+                ),
+                "sensor_cfg": feet_cfg,
+                "contact_force_threshold": 1.0,
+            },
+        )
 
         # ------------------------------Terminations------------------------------
         self.terminations.illegal_contact = None

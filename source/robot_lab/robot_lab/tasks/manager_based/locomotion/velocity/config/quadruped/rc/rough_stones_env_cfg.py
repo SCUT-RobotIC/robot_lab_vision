@@ -18,7 +18,10 @@ RC_STONY_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     num_cols=20,
     horizontal_scale=0.05,
     vertical_scale=0.005,
-    slope_threshold=0.75,
+    # Keep height transitions as continuous slopes. Isaac Lab's slope correction
+    # moves vertices by a full grid cell and creates zero-area collision faces at
+    # the diagonal walls, which can trap the RC feet.
+    slope_threshold=None,
     difficulty_range=(0.0, 1.0),
     use_cache=False,
     sub_terrains={

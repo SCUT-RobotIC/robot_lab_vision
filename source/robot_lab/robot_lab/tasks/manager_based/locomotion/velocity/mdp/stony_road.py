@@ -36,8 +36,13 @@ def stony_road_terrain(difficulty: float, cfg) -> tuple[list[trimesh.Trimesh], n
     height_step = max(int(cfg.noise_step / cfg.vertical_scale), 1)
     height_range = np.arange(height_min, height_max + height_step, height_step)
 
-    heights = np.random.choice(height_range, size=(width_downsampled, length_downsampled))
-    if (width_downsampled, length_downsampled) != (width_pixels, length_pixels):
+    if cfg.downsampled_scale == cfg.horizontal_scale:
+        # Sample the final grid directly. The mesh needs one more vertex than the
+        # number of horizontal intervals; repeating a 160x160 grid to 161x161
+        # would otherwise turn every sample into an unintended 2x2 plateau.
+        heights = np.random.choice(height_range, size=(width_pixels, length_pixels))
+    else:
+        heights = np.random.choice(height_range, size=(width_downsampled, length_downsampled))
         repeat_x = max(int(np.ceil(width_pixels / width_downsampled)), 1)
         repeat_y = max(int(np.ceil(length_pixels / length_downsampled)), 1)
         heights = np.repeat(np.repeat(heights, repeat_x, axis=0), repeat_y, axis=1)
@@ -67,6 +72,18 @@ def stony_road_terrain(difficulty: float, cfg) -> tuple[list[trimesh.Trimesh], n
         cfg.vertical_scale,
         cfg.slope_threshold,
     )
+    triangle_vertices = vertices[triangles]
+    double_areas = np.linalg.norm(
+        np.cross(
+            triangle_vertices[:, 1] - triangle_vertices[:, 0],
+            triangle_vertices[:, 2] - triangle_vertices[:, 0],
+        ),
+        axis=1,
+    )
+    if np.any(double_areas <= np.finfo(vertices.dtype).eps):
+        raise ValueError(
+            "Stony-road terrain contains degenerate triangles; disable slope correction or adjust the height field."
+        )
     mesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
 
     x1 = int((cfg.size[0] * 0.5 - 1) / cfg.horizontal_scale)

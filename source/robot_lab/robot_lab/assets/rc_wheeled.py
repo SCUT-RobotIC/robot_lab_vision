@@ -12,13 +12,13 @@ WHEEL_MAX_EFFORT = 3.69
 WHEEL_RATED_VELOCITY = 571.0 * 2.0 * math.pi / 60.0
 WHEEL_MAX_VELOCITY = 587.0 * 2.0 * math.pi / 60.0
 WHEEL_RADIUS = 0.06
-RC27_INITIAL_HEIGHT = 0.48
-RC27_STANDING_HEIGHT = 0.42
+RCWHEEL_INITIAL_HEIGHT = 0.48
+RCWHEEL_STANDING_HEIGHT = 0.42
 
 RC_WHEELED_CFG = RC_CFG.copy()
 RC_WHEELED_CFG.spawn.asset_path = f"{ISAACLAB_ASSETS_DATA_DIR}/Robots/RC/27dog urdf/urdf/27dog.SLDASM.urdf"
 RC_WHEELED_CFG.spawn.force_usd_conversion = True
-RC_WHEELED_CFG.init_state.pos = (0.0, 0.0, RC27_INITIAL_HEIGHT)
+RC_WHEELED_CFG.init_state.pos = (0.0, 0.0, RCWHEEL_INITIAL_HEIGHT)
 RC_WHEELED_CFG.init_state.joint_pos[".*_feet_joint"] = 0.0
 RC_WHEELED_CFG.actuators["wheels"] = ImplicitActuatorCfg(
     joint_names_expr=[".*_feet_joint"],

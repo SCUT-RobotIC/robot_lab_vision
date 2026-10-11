@@ -1,51 +1,95 @@
+# Copyright (c) 2024-2025 Ziqi Fan
+# SPDX-License-Identifier: Apache-2.0
+
 from isaaclab.utils import configclass
+from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
-from robot_lab.tasks.manager_based.locomotion.velocity.config.quadruped.rc.agents import rsl_rl_ppo_cfg as quadruped
+
+# 使用 rsl_rl 库（而不是 cusrl）来进行 PPO 训练而设计的
+@configclass
+class RCRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    num_steps_per_env = 24
+    max_iterations = 20000
+    save_interval = 100
+    experiment_name = "rcwheel_rough"
+    policy = RslRlPpoActorCriticCfg(
+        init_noise_std=1.0,
+        actor_obs_normalization=True,
+        critic_obs_normalization=True,
+        actor_hidden_dims=[512, 256, 128],
+        critic_hidden_dims=[512, 256, 128],
+        activation="elu",
+    )
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.2,
+        entropy_coef=0.01,
+        num_learning_epochs=5,
+        num_mini_batches=4,
+        learning_rate=1.0e-3,
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.01,
+        max_grad_norm=1.0,
+    )
 
 
 @configclass
-class RCFlatPPORunnerCfg(quadruped.RCFlatPPORunnerCfg):
+class RCFlatPPORunnerCfg(RCRoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
-        self.experiment_name = "rc27_flat"
+
+        self.max_iterations = 5000
+        self.experiment_name = "rcwheel_flat"
 
 
 @configclass
-class RCRoughPPORunnerCfg(quadruped.RCRoughPPORunnerCfg):
+class RCLowBarPPORunnerCfg(RCRoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
-        self.experiment_name = "rc27_rough"
+
+        self.max_iterations = 10000
+        self.experiment_name = "rcwheel_low_bar"
+        self.policy.actor_hidden_dims = [512, 256, 128]
+        self.policy.critic_hidden_dims = [512, 256, 128]
 
 
 @configclass
-class RCRoughStonesPPORunnerCfg(quadruped.RCRoughStonesPPORunnerCfg):
+class RCRoughStonesPPORunnerCfg(RCRoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
-        self.experiment_name = "rc27_rough_stones"
+
+        self.max_iterations = 15000
+        self.experiment_name = "rcwheel_rough_stones"
+        self.policy.actor_hidden_dims = [512, 256, 128]
+        self.policy.critic_hidden_dims = [512, 256, 128]
 
 
 @configclass
-class RCLowBarPPORunnerCfg(quadruped.RCLowBarPPORunnerCfg):
+class RCLowWallPPORunnerCfg(RCRoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
-        self.experiment_name = "rc27_low_bar"
 
-
-@configclass
-class RCLowWallPPORunnerCfg(quadruped.RCLowWallPPORunnerCfg):
-    def __post_init__(self):
-        super().__post_init__()
-        self.experiment_name = "rc27_low_wall"
-        self.load_experiment_name = "rc27_rough_stones"
+        self.max_iterations = 12000
+        self.experiment_name = "rcwheel_low_wall"
+        self.load_experiment_name = "rcwheel_rough_stones"
         self.load_run = ".*"
         self.load_checkpoint = "model_.*.pt"
+        self.policy.actor_hidden_dims = [512, 256, 128]
+        self.policy.critic_hidden_dims = [512, 256, 128]
 
 
 @configclass
-class RCBrokenBridgePPORunnerCfg(quadruped.RCBrokenBridgePPORunnerCfg):
+class RCBrokenBridgePPORunnerCfg(RCRoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
-        self.experiment_name = "rc27_broken_bridge"
-        self.load_experiment_name = "rc27_rough_stones"
-        self.load_run = ".*"
-        self.load_checkpoint = "model_.*.pt"
+
+        self.max_iterations = 16000
+        self.experiment_name = "rcwheel_broken_bridge"
+        self.load_experiment_name = "rcwheel_rough_stones"
+        self.load_run = "2026-06-24_13-15-26"
+        self.load_checkpoint = "model_19999.pt"
+        self.policy.actor_hidden_dims = [512, 256, 128]
+        self.policy.critic_hidden_dims = [512, 256, 128]

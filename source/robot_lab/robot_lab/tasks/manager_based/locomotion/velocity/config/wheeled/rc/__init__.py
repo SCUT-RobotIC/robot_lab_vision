@@ -15,7 +15,7 @@ for terrain, module, class_prefix in (
         suffix = "-Play" if play else ""
         cfg_suffix = "PlayEnvCfg" if play else "EnvCfg"
         gym.register(
-            id=f"RobotLab-Isaac-Velocity-{terrain}{suffix}-RC27-v0",
+            id=f"RobotLab-Isaac-Velocity-{terrain}{suffix}-RCwheel-v0",
             entry_point="isaaclab.envs:ManagerBasedRLEnv",
             disable_env_checker=True,
             kwargs={

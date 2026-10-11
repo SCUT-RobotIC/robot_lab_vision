@@ -8,8 +8,8 @@ from isaaclab.utils import configclass
 
 import robot_lab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from robot_lab.assets.rc_wheeled import (
-    RC27_INITIAL_HEIGHT,
-    RC27_STANDING_HEIGHT,
+    RCWHEEL_INITIAL_HEIGHT,
+    RCWHEEL_STANDING_HEIGHT,
     RC_WHEELED_CFG,
     WHEEL_MAX_VELOCITY,
 )
@@ -61,7 +61,7 @@ class RCWheeledActionsCfg(ActionsCfg):
     )
 
 
-def configure_wheeled_rc(env_cfg, initial_height=RC27_INITIAL_HEIGHT):
+def configure_wheeled_rc(env_cfg, initial_height=RCWHEEL_INITIAL_HEIGHT):
     initial_position = env_cfg.scene.robot.init_state.pos
     initial_joint_positions = env_cfg.scene.robot.init_state.joint_pos.copy()
     robot = RC_WHEELED_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
@@ -113,7 +113,7 @@ def configure_wheeled_rc(env_cfg, initial_height=RC27_INITIAL_HEIGHT):
             setattr(env_cfg.rewards, term_name, None)
 
     if env_cfg.rewards.base_height_l2 is not None:
-        env_cfg.rewards.base_height_l2.params["target_height"] = RC27_STANDING_HEIGHT
+        env_cfg.rewards.base_height_l2.params["target_height"] = RCWHEEL_STANDING_HEIGHT
 
     if env_cfg.rewards.action_sync is not None:
         env_cfg.rewards.action_sync.func = leg_action_sync

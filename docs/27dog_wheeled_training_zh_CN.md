@@ -1,30 +1,30 @@
 # 27dog 轮足 RC 训练说明
 
-本次在 `source/robot_lab/robot_lab/tasks/manager_based/locomotion/velocity/config/wheeled/rc` 下创建轮足环境。它们继承原四足 RC 各任务的地形、障碍、命令、随机化和 PPO 设置，再统一替换 27dog 资产、轮控、状态选择和奖励；原四足任务 ID 与资产配置保留。
+本次在 `source/robot_lab/robot_lab/tasks/manager_based/locomotion/velocity/config/wheeled/rc` 下创建独立轮足环境。轮足配置只共享通用 velocity 基类、MDP 函数和轮足适配工具，不再从四足 RC 配置导入任务文件，因此轮足与四足可以分别调整。
 
 ## 1. 直接启动 rough_stones
 
 在已经安装本仓库和 Isaac Lab/Isaac Sim 的训练 Python 环境中，从仓库根目录运行。建议先用少量环境完成一次真实导入与训练检查：
 
 ```powershell
-python scripts/reinforcement_learning/rsl_rl/train.py --task RobotLab-Isaac-Velocity-RoughStones-RC27-v0 --num_envs 32 --max_iterations 1 --headless
+python scripts/reinforcement_learning/rsl_rl/train.py --task RobotLab-Isaac-Velocity-RoughStones-RCwheel-v0 --num_envs 32 --max_iterations 1 --headless
 ```
 
 正式训练：
 
 ```powershell
-python scripts/reinforcement_learning/rsl_rl/train.py --task RobotLab-Isaac-Velocity-RoughStones-RC27-v0 --num_envs 4096 --headless
+python scripts/reinforcement_learning/rsl_rl/train.py --task RobotLab-Isaac-Velocity-RoughStones-RCwheel-v0 --num_envs 4096 --headless
 ```
 
-如显存不足，降低 `--num_envs`。默认 15000 次迭代，日志和模型保存到 `logs/rsl_rl/rc27_rough_stones`，默认每 100 次迭代保存。单次迭代用于检查环境，不保证生成可用于回放的周期 checkpoint。
+如显存不足，降低 `--num_envs`。默认 15000 次迭代，日志和模型保存到 `logs/rsl_rl/rcwheel_rough_stones`，默认每 100 次迭代保存。单次迭代用于检查环境，不保证生成可用于回放的周期 checkpoint。
 
 训练完成后回放：
 
 ```powershell
-python scripts/reinforcement_learning/rsl_rl/play.py --task RobotLab-Isaac-Velocity-RoughStones-Play-RC27-v0 --num_envs 16
+python scripts/reinforcement_learning/rsl_rl/play.py --task RobotLab-Isaac-Velocity-RoughStones-Play-RCwheel-v0 --num_envs 16
 ```
 
-新策略的动作及观测维度改变，不可直接恢复旧四足的 12 维模型。LowWall/BrokenBridge 的加载实验名也改为 `rc27_rough_stones`；需要迁移时选取轮足 checkpoint，并显式启用 resume。
+新策略的动作及观测维度改变，不可直接恢复旧四足的 12 维模型。LowWall/BrokenBridge 的加载实验名为 `rcwheel_rough_stones`；需要迁移时选取轮足 checkpoint，并显式启用 resume。
 
 ## 2. 关节与电机参数
 
@@ -71,12 +71,12 @@ rough_stones 默认腿角仍为 hip=0、thigh=0.7、calf=-1.5。默认基座 z �
 
 | 任务 | 训练 ID | 回放 ID |
 | --- | --- | --- |
-| Flat | RobotLab-Isaac-Velocity-Flat-RC27-v0 | RobotLab-Isaac-Velocity-Flat-Play-RC27-v0 |
-| Rough | RobotLab-Isaac-Velocity-Rough-RC27-v0 | RobotLab-Isaac-Velocity-Rough-Play-RC27-v0 |
-| RoughStones | RobotLab-Isaac-Velocity-RoughStones-RC27-v0 | RobotLab-Isaac-Velocity-RoughStones-Play-RC27-v0 |
-| LowBar | RobotLab-Isaac-Velocity-LowBar-RC27-v0 | RobotLab-Isaac-Velocity-LowBar-Play-RC27-v0 |
-| LowWall | RobotLab-Isaac-Velocity-LowWall-RC27-v0 | RobotLab-Isaac-Velocity-LowWall-Play-RC27-v0 |
-| BrokenBridge | RobotLab-Isaac-Velocity-BrokenBridge-RC27-v0 | RobotLab-Isaac-Velocity-BrokenBridge-Play-RC27-v0 |
+| Flat | RobotLab-Isaac-Velocity-Flat-RCwheel-v0 | RobotLab-Isaac-Velocity-Flat-Play-RCwheel-v0 |
+| Rough | RobotLab-Isaac-Velocity-Rough-RCwheel-v0 | RobotLab-Isaac-Velocity-Rough-Play-RCwheel-v0 |
+| RoughStones | RobotLab-Isaac-Velocity-RoughStones-RCwheel-v0 | RobotLab-Isaac-Velocity-RoughStones-Play-RCwheel-v0 |
+| LowBar | RobotLab-Isaac-Velocity-LowBar-RCwheel-v0 | RobotLab-Isaac-Velocity-LowBar-Play-RCwheel-v0 |
+| LowWall | RobotLab-Isaac-Velocity-LowWall-RCwheel-v0 | RobotLab-Isaac-Velocity-LowWall-Play-RCwheel-v0 |
+| BrokenBridge | RobotLab-Isaac-Velocity-BrokenBridge-RCwheel-v0 | RobotLab-Isaac-Velocity-BrokenBridge-Play-RCwheel-v0 |
 
 这六类是 velocity 分支下原 RC 的全部任务，rough_stones 属于这个分支。本次没有迁移 vision 分支下的 Teacher/TS/DAgger 流程，也没有修改 sim2sim 的独立 MJCF。
 

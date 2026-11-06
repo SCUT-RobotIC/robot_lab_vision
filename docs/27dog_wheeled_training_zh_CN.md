@@ -28,7 +28,7 @@ python scripts/reinforcement_learning/rsl_rl/play.py --task RobotLab-Isaac-Veloc
 
 ## 2. 关节与电机参数
 
-训练资产为 `assets/rc_wheeled.py` 中的 `RC_WHEELED_CFG`，URDF 为 `data/Robots/RC/27dog urdf/urdf/27dog.SLDASM.urdf`。
+训练资产为 `assets/rc_wheeled.py` 中的 `RC_WHEELED_CFG`，URDF 已切换为 `data/Robots/RC/27dog urdf v1/27dog urdf v1/urdf/27dog urdf v1.urdf`。
 
 | 项目 | 本次设置 |
 | --- | --- |
@@ -55,11 +55,11 @@ python scripts/reinforcement_learning/rsl_rl/play.py --task RobotLab-Isaac-Veloc
 
 policy 和 critic 的 joint_pos 只包含 12 个腿关节，joint_vel 包含全部 16 个关节；critic 的 joint_effort 包含全部 16 个关节。原有动作历史随动作管理器自动扩为 16 维。这样策略能读取四轮速度，同时避免 continuous 轮角累积进入位置观测和站立/默认姿态惩罚。
 
-27dog 的 16 个运动 link 恢复为 `*_hip_link / *_thigh_link / *_calf_link / *_feet_link`，joint 名保持原样，因此原有足端接触、材料随机化和 stance 奖励选择器仍能命中四个轮 body。17 个 mesh URI 改为相对 URDF 所在目录的 `../meshes/...`，不依赖旧 `27dog.SLDASM` ROS 包名解析；未重建 ROS/Gazebo 包元数据。本次保留 27dog 原有质量、惯量、碰撞体和轮轴位置。
+v1 的 link 名称已修正为 `*_hip_link / *_thigh_link / *_calf_link / *_feet_link`，joint 名称保持原样，因此原有足端接触、材料随机化和 stance 奖励选择器仍能命中四个轮 body。17 个 mesh URI 改为相对 URDF 所在目录的 `../meshes/...`，不依赖含空格的 ROS 包名解析；未重建 ROS/Gazebo 包元数据。本次保留 v1 的新几何、质量、惯量、碰撞体和关节安装原点，仅修正关节类型/限制及网格路径。
 
-rough_stones 默认腿角仍为 hip=0、thigh=0.7、calf=-1.5。默认基座 z 改为 0.48 m，平地名义轮胎最低点间隙约 57.65 mm，给重置扰动留出余量；站立高度奖励目标为 0.42 m。腿重置角扰动收紧到 ±0.05 rad，root roll/pitch 收紧到不超过 ±0.05 rad，其余任务已有的重置范围保留。轮子每次重置角度、速度为零，并与腿重置事件分开。
+rough_stones 默认腿角仍为 hip=0、thigh=0.7、calf=-1.5。按 v1 的关节原点做正向运动学，轮轴在 base 坐标下 z=-0.362354 m；轮碰撞半径为 0.085 m，因此基座 z=0.48 m 时，理想平地上的名义轮胎最低点间隙约 32.65 mm。保留 0.48 m 作为重置扰动余量，站立高度奖励目标仍为 0.42 m。腿重置角扰动收紧到 ±0.05 rad，root roll/pitch 收紧到不超过 ±0.05 rad，其余任务已有的重置范围保留。轮子每次重置角度、速度为零，并与腿重置事件分开。
 
-静态检查枚举了每腿三个关节以及 root roll/pitch 的扰动端点，rough_stones 全部基本碰撞体的最小平地间隙约 19.575 mm。这不是粗糙地形任意点上无穿透的证明，实际地形接触仍应由真实仿真检查。
+此前记录的粗糙石地形碰撞间隙基于旧版 60 mm 轮胎和旧碰撞几何，不适用于 v1。v1 的重置扰动端点和全部基本碰撞体仍需在新版资产上重新计算/由 Isaac Sim 验证；上述 32.65 mm 只表示标称姿态下轮胎几何的平地间隙，不代表完整碰撞模型或粗糙地形无穿透。
 
 低杆任务保留原前腿 thigh=1.1、后腿 thigh=1.4、calf=-2.45 的蹲伏角度，初始高度改为 0.28 m，base_height 命令改为 0.18~0.20 m。相同角扰动/姿态端点下，全部碰撞体最小平地间隙约 15.237 mm。低墙/断桥仍保留原障碍布局与进度奖励，起始 x/y 保留、z 更新为 0.48 m。
 

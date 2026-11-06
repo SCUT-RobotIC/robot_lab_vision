@@ -2,6 +2,8 @@
 
 审查日期：2026-10-11。长度单位为 m，角度为 rad，质量为 kg，惯量为 kg·m²，关节力矩为 N·m，关节角速度为 rad/s。FL/FR/RL/RR 分别表示左前、右前、左后、右后。
 
+本文第 1～9 节记录此前 27dog 轮足 URDF（`27dog.SLDASM.urdf`）的审查结论；第 10 节补充机械侧提供的 `27dog urdf v1` 复核、修正和训练资产切换结果。
+
 ## 1. 审查对象、方法与结论边界
 
 ### 1.1 实际使用的基线
@@ -347,7 +349,19 @@ base 三角形数从 1,080,030 增至 1,115,000；髋部各自三角形数相同
 
 本地主要证据为：`rc.py`（实际资产路径、初始化、执行器、自碰撞设置）、两份主 URDF、27dog 的 .bak/CSV/STL/export.log/package.xml/launch/YAML、Teacher/TS 任务配置和 sim2sim 脚本。所有“同名映射后数值一致”的判断使用实际基线，未将其他 DOG 或 v2 当成当前版本。
 
-关键代码定位：`rc.py:28` 为当前资产路径；`teacher_env_cfg.py:104`、`TS_env_cfg.py:116` 分别为 0.35/0.30 高度目标；`teacher_env_cfg.py:148`、`TS_env_cfg.py:160` 均关闭 feet_slide；`vision/mdp/rewards.py:557` 是实际滑动奖励函数。静态核查不替代最终 USD 中的有效属性检查。
+## 10. 27dog urdf v1 训练接入复核（2026-11-06）
+
+新版机械文件位于 `source/robot_lab/data/Robots/RC/27dog urdf v1/27dog urdf v1/urdf/27dog urdf v1.urdf`。检查后确认它有 17 个 link、16 个 joint；新安装原点、质量/惯量、碰撞体和网格均作为 v1 几何保留，不套用旧版的几何数值。按之前审查结论完成以下修复：
+
+- 四条腿的 hip/thigh/calf 限位、力矩和速度恢复为本项目既有设置；四个轮 joint 改为 continuous，设输出端 effort=3.69 N·m、velocity=61.47049625524 rad/s，并移除角度上下限。
+- 轴向保持导出值：hip 为 +X，thigh/calf/wheel 为 +Y。没有从旧版拷贝关节原点，避免覆盖 v1 新机械布置。
+- 网格 URI 从带空格的 `package://` URI 改为相对于 URDF 目录的 `../meshes/...`；17 个引用均有对应 STL。
+- 训练资产改为加载 v1。v1 的 link 名称已适配为 `*_feet_link` 等原有 body 命名，因此轮足任务里的足端接触和奖励 body 查询保持兼容；未触碰四足 RC 资产。
+- 默认腿角下，v1 的轮轴 z 约为 -0.362354 m，轮半径 0.085 m；初始 base z=0.48 m 对应标称平地轮胎间隙约 32.65 mm。该值作为初始设置保留，不等于已验证重置扰动或粗糙地形下不会穿透。
+
+以上是静态 URDF 与配置复核，不包含 Isaac Sim/USD 导入和 PPO 实际运行。原始 `.urdf.bak`、CSV 与 SolidWorks 导出目录中的 ROS 包元数据均保留未改，方便追溯。
+
+关键代码定位（历史四足基线）：`rc.py:28` 为旧四足资产路径；`teacher_env_cfg.py:104`、`TS_env_cfg.py:116` 分别为 0.35/0.30 高度目标；`teacher_env_cfg.py:148`、`TS_env_cfg.py:160` 均关闭 feet_slide；`vision/mdp/rewards.py:557` 是实际滑动奖励函数。当前轮足 v1 入口为 `assets/rc_wheeled.py`，静态核查不替代最终 USD 中的有效属性检查。
 
 规范语义另核对了 ROS 官方 `urdfdom/urdf_parser/src/joint.cpp`（关节类型及 limit 解析）、`urdfdom_headers/include/urdf_model/joint.h`（joint 局部 axis 与 origin 坐标关系）、`ros-infrastructure/rep/rep-0144.rst`（ROS 包命名）。直接读取官方仓库源码；没有用第三方教程推定当前 Isaac 的导入行为。
 

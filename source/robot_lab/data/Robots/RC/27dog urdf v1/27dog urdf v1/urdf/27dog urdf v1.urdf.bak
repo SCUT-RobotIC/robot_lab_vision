@@ -1,0 +1,975 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="27dog urdf v1">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.000513616954985958 0.000387698327938564 0.00494767994133974"
+        rpy="0 0 0" />
+      <mass
+        value="4.33494149754701" />
+      <inertia
+        ixx="0.0105723973592619"
+        ixy="-1.28223950813671E-08"
+        ixz="2.18699606488961E-05"
+        iyy="0.0120712858951467"
+        iyz="-2.62399498706296E-06"
+        izz="0.0140664090193309" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="FL_hip_joint">
+    <inertial>
+      <origin
+        xyz="0.0164447360881469 0.0132026463105165 1.80408947949087E-07"
+        rpy="0 0 0" />
+      <mass
+        value="0.0898261905882575" />
+      <inertia
+        ixx="4.27895758415059E-05"
+        ixy="6.41500278851856E-06"
+        ixz="-9.85534930374978E-11"
+        iyy="4.31214777836035E-05"
+        iyz="-3.94263588563355E-10"
+        izz="2.46896240340366E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FL_hip_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FL_hip_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FL_hip_joint"
+    type="revolute">
+    <origin
+      xyz="0.1575 0.055 0.01"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="FL_hip_joint" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="FL_thigh_joint">
+    <inertial>
+      <origin
+        xyz="-0.00283134368234128 -0.0155711565453734 -0.0779780874944708"
+        rpy="0 0 0" />
+      <mass
+        value="0.791886376612252" />
+      <inertia
+        ixx="0.0026734713687326"
+        ixy="-1.96813382176144E-08"
+        ixz="3.0952033605627E-05"
+        iyy="0.00297701391979304"
+        iyz="9.30093371364126E-08"
+        izz="0.000363451469273256" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FL_thigh_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.149019607843137 0.149019607843137 0.149019607843137 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FL_thigh_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FL_thigh_joint"
+    type="revolute">
+    <origin
+      xyz="0.072 0.1201 0"
+      rpy="0 0 0" />
+    <parent
+      link="FL_hip_joint" />
+    <child
+      link="FL_thigh_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="FL_calf_joint">
+    <inertial>
+      <origin
+        xyz="0.003459 -0.031439 -0.18589"
+        rpy="0 0 0" />
+      <mass
+        value="0.24741" />
+      <inertia
+        ixx="0.0012976"
+        ixy="-2.0388E-09"
+        ixz="-1.1849E-06"
+        iyy="0.0013723"
+        iyz="-8.6313E-09"
+        izz="8.0215E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FL_calf_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FL_calf_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FL_calf_joint"
+    type="revolute">
+    <origin
+      xyz="0 0.03 -0.25"
+      rpy="0 0 0" />
+    <parent
+      link="FL_thigh_joint" />
+    <child
+      link="FL_calf_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="FL_feet_joint">
+    <inertial>
+      <origin
+        xyz="-8.26198200455097E-05 0.00709025510419919 -0.00015073016072864"
+        rpy="0 0 0" />
+      <mass
+        value="0.966203375420384" />
+      <inertia
+        ixx="0.00153957209323289"
+        ixy="-3.21598440341598E-08"
+        ixz="-2.70770068479509E-06"
+        iyy="0.00291885794489917"
+        iyz="-4.56327435816433E-08"
+        izz="0.00154232602788521" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FL_feet_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.298039215686275 0.298039215686275 0.298039215686275 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FL_feet_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FL_feet_joint"
+    type="revolute">
+    <origin
+      xyz="0 0.008645 -0.26"
+      rpy="0 0 0" />
+    <parent
+      link="FL_calf_joint" />
+    <child
+      link="FL_feet_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="FR_hip_joint">
+    <inertial>
+      <origin
+        xyz="0.0164447360888552 -0.0132026463207652 -1.80410290775979E-07"
+        rpy="0 0 0" />
+      <mass
+        value="0.0898261905882574" />
+      <inertia
+        ixx="4.27895758415339E-05"
+        ixy="-6.41500279146266E-06"
+        ixz="9.85498391691173E-11"
+        iyy="4.31214777836045E-05"
+        iyz="-3.94263273140229E-10"
+        izz="2.46896240340075E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FR_hip_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FR_hip_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FR_hip_joint"
+    type="revolute">
+    <origin
+      xyz="0.1575 -0.055 0.01"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="FR_hip_joint" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="FR_thigh_joint">
+    <inertial>
+      <origin
+        xyz="-0.00270541253419471 0.0161572590703198 -0.0805883888012565"
+        rpy="0 0 0" />
+      <mass
+        value="0.771120765740425" />
+      <inertia
+        ixx="0.0026760243235607"
+        ixy="-6.49236905287693E-09"
+        ixz="3.07520275068411E-05"
+        iyy="0.00298061292566387"
+        iyz="-1.10299571842643E-07"
+        izz="0.000362377509664192" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FR_thigh_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.149019607843137 0.149019607843137 0.149019607843137 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FR_thigh_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FR_thigh_joint"
+    type="revolute">
+    <origin
+      xyz="0.072 -0.1201 0"
+      rpy="0 0 0" />
+    <parent
+      link="FR_hip_joint" />
+    <child
+      link="FR_thigh_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="FR_calf_joint">
+    <inertial>
+      <origin
+        xyz="0.00361590472995593 0.0314623325226104 -0.182330913139132"
+        rpy="0 0 0" />
+      <mass
+        value="0.237013814295426" />
+      <inertia
+        ixx="0.00129740317812699"
+        ixy="-9.76762929698217E-09"
+        ixz="-1.1298046516654E-06"
+        iyy="0.00137228661415704"
+        iyz="-1.01268968176033E-08"
+        izz="8.00662994859213E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FR_calf_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FR_calf_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FR_calf_joint"
+    type="revolute">
+    <origin
+      xyz="0 -0.03 -0.25"
+      rpy="0 0 0" />
+    <parent
+      link="FR_thigh_joint" />
+    <child
+      link="FR_calf_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="FR_feet_joint">
+    <inertial>
+      <origin
+        xyz="-2.11274498062575E-05 -0.00709025505213251 -0.000170584960396014"
+        rpy="0 0 0" />
+      <mass
+        value="0.966203377275901" />
+      <inertia
+        ixx="0.00153794497397736"
+        ixy="5.98509044466607E-10"
+        ixz="-4.50713320792937E-07"
+        iyy="0.00291885794469526"
+        iyz="5.5823398541031E-08"
+        izz="0.00154395314696011" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FR_feet_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.298039215686275 0.298039215686275 0.298039215686275 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/FR_feet_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FR_feet_joint"
+    type="revolute">
+    <origin
+      xyz="0 -0.008645 -0.26"
+      rpy="0 0 0" />
+    <parent
+      link="FR_calf_joint" />
+    <child
+      link="FR_feet_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="RL_hip_joint">
+    <inertial>
+      <origin
+        xyz="-0.0164447360881469 0.0132026463105166 -1.8040894789878E-07"
+        rpy="0 0 0" />
+      <mass
+        value="0.0898261905882575" />
+      <inertia
+        ixx="4.27895758415059E-05"
+        ixy="-6.41500278851853E-06"
+        ixz="-9.85534930259524E-11"
+        iyy="4.31214777836034E-05"
+        iyz="3.94263588536143E-10"
+        izz="2.46896240340366E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RL_hip_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RL_hip_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RL_hip_joint"
+    type="revolute">
+    <origin
+      xyz="-0.1575 0.055 0.01"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="RL_hip_joint" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="RL_thigh_joint">
+    <inertial>
+      <origin
+        xyz="-0.00302441622445462 -0.0155347325408574 -0.0779433566348326"
+        rpy="0 0 0" />
+      <mass
+        value="0.794086546002458" />
+      <inertia
+        ixx="0.00267355988685869"
+        ixy="-1.96813379188687E-08"
+        ixz="3.09520335826467E-05"
+        iyy="0.00297700473467835"
+        iyz="9.30093369443939E-08"
+        izz="0.000363539987647209" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RL_thigh_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.149019607843137 0.149019607843137 0.149019607843137 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RL_thigh_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RL_thigh_joint"
+    type="revolute">
+    <origin
+      xyz="-0.072 0.1201 0"
+      rpy="0 0 0" />
+    <parent
+      link="RL_hip_joint" />
+    <child
+      link="RL_thigh_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="RL_calf_joint">
+    <inertial>
+      <origin
+        xyz="0.00365044616507393 -0.0314807747839074 -0.182324306133981"
+        rpy="0 0 0" />
+      <mass
+        value="0.236992223864468" />
+      <inertia
+        ixx="0.0012973955386165"
+        ixy="-2.03879071631854E-09"
+        ixz="-1.18487769497675E-06"
+        iyy="0.00137226073743982"
+        iyz="-8.63129450716313E-09"
+        izz="8.00456564993223E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RL_calf_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RL_calf_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RL_calf_joint"
+    type="revolute">
+    <origin
+      xyz="0 0.03 -0.25"
+      rpy="0 0 0" />
+    <parent
+      link="RL_thigh_joint" />
+    <child
+      link="RL_calf_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="RL_feet_joint">
+    <inertial>
+      <origin
+        xyz="-8.26198200418737E-05 0.00709025510418959 -0.000150730160683787"
+        rpy="0 0 0" />
+      <mass
+        value="0.966203375420377" />
+      <inertia
+        ixx="0.00153957209329834"
+        ixy="-3.21598537243126E-08"
+        ixz="-2.70770068252946E-06"
+        iyy="0.00291885794498854"
+        iyz="-4.56327508233778E-08"
+        izz="0.00154232602788672" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RL_feet_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.298039215686275 0.298039215686275 0.298039215686275 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RL_feet_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RL_feet_joint"
+    type="revolute">
+    <origin
+      xyz="0 0.008645 -0.26"
+      rpy="0 0 0" />
+    <parent
+      link="RL_calf_joint" />
+    <child
+      link="RL_feet_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="RR_hip_joint">
+    <inertial>
+      <origin
+        xyz="-0.0164447360888553 -0.0132026463207651 1.80410290795061E-07"
+        rpy="0 0 0" />
+      <mass
+        value="0.0898261905882577" />
+      <inertia
+        ixx="4.27895758415341E-05"
+        ixy="6.41500279146268E-06"
+        ixz="9.85498391500202E-11"
+        iyy="4.31214777836046E-05"
+        iyz="3.94263273134449E-10"
+        izz="2.46896240340076E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RR_hip_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RR_hip_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RR_hip_joint"
+    type="revolute">
+    <origin
+      xyz="-0.1575 -0.055 0.01"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="RR_hip_joint" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="RR_thigh_joint">
+    <inertial>
+      <origin
+        xyz="-0.0026161440805986 0.0161462913468467 -0.0805507802943922"
+        rpy="0 0 0" />
+      <mass
+        value="0.769739872080867" />
+      <inertia
+        ixx="0.00267597571201549"
+        ixy="-6.49236901627804E-09"
+        ixz="3.07520275064897E-05"
+        iyy="0.00298060984832592"
+        iyz="-1.10299571793224E-07"
+        izz="0.000362328898118927" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RR_thigh_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.149019607843137 0.149019607843137 0.149019607843137 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RR_thigh_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RR_thigh_joint"
+    type="revolute">
+    <origin
+      xyz="-0.072 -0.1201 0"
+      rpy="0 0 0" />
+    <parent
+      link="RR_hip_joint" />
+    <child
+      link="RR_thigh_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="RR_calf_joint">
+    <inertial>
+      <origin
+        xyz="0.00361590472995582 0.03146233252261 -0.182330913139132"
+        rpy="0 0 0" />
+      <mass
+        value="0.237013814295425" />
+      <inertia
+        ixx="0.00129740317812698"
+        ixy="-9.76762929921721E-09"
+        ixz="-1.12980465167418E-06"
+        iyy="0.00137228661415703"
+        iyz="-1.01268968169145E-08"
+        izz="8.00662994858993E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RR_calf_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RR_calf_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RR_calf_joint"
+    type="revolute">
+    <origin
+      xyz="0 -0.03 -0.25"
+      rpy="0 0 0" />
+    <parent
+      link="RR_thigh_joint" />
+    <child
+      link="RR_calf_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="RR_feet_joint">
+    <inertial>
+      <origin
+        xyz="-2.11274497942948E-05 -0.00709025505213953 -0.00017058496041511"
+        rpy="0 0 0" />
+      <mass
+        value="0.9662033772759" />
+      <inertia
+        ixx="0.00153794497401782"
+        ixy="5.98515878506451E-10"
+        ixz="-4.50713336078434E-07"
+        iyy="0.00291885794475455"
+        iyz="5.58233931945512E-08"
+        izz="0.00154395314697895" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RR_feet_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.298039215686275 0.298039215686275 0.298039215686275 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://27dog urdf v1/meshes/RR_feet_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RR_feet_joint"
+    type="revolute">
+    <origin
+      xyz="0 -0.008645 -0.26"
+      rpy="0 0 0" />
+    <parent
+      link="RR_calf_joint" />
+    <child
+      link="RR_feet_joint" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+</robot>

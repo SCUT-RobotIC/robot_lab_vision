@@ -7,6 +7,7 @@ from dataclasses import MISSING
 
 import numpy as np
 import trimesh
+
 from isaaclab.terrains.height_field.utils import convert_height_field_to_mesh
 from isaaclab.utils import configclass
 
@@ -61,7 +62,9 @@ def stony_road_terrain(difficulty: float, cfg) -> tuple[list[trimesh.Trimesh], n
     rows = np.arange(width_pixels)[:, None]
     cols = np.arange(length_pixels)[None, :]
     main_diag = np.abs(rows * (length_pixels - 1) - cols * (width_pixels - 1))
-    anti_diag = np.abs(rows * (length_pixels - 1) + cols * (width_pixels - 1) - (width_pixels - 1) * (length_pixels - 1))
+    anti_diag = np.abs(
+        rows * (length_pixels - 1) + cols * (width_pixels - 1) - (width_pixels - 1) * (length_pixels - 1)
+    )
     diag_threshold = wall_pixels * max(width_pixels - 1, length_pixels - 1)
     diagonal_mask = (main_diag <= diag_threshold) | (anti_diag <= diag_threshold)
     heights[diagonal_mask] = heights[diagonal_mask] + diagonal_wall
@@ -84,7 +87,27 @@ def stony_road_terrain(difficulty: float, cfg) -> tuple[list[trimesh.Trimesh], n
         raise ValueError(
             "Stony-road terrain contains degenerate triangles; disable slope correction or adjust the height field."
         )
-    mesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
+    # A height field only has a top surface. Close its perimeter down to a
+    # buried base so the raised edge has an outward collision face even next
+    # to a stair tile (whose border is at z=0).
+    if cfg.base_depth <= 0:
+        raise ValueError("Stony-road base_depth must be positive.")
+    grid = np.arange(len(vertices)).reshape(width_pixels, length_pixels)
+    perimeter = np.concatenate((grid[:, 0], grid[-1, 1:], grid[-2::-1, -1], grid[0, -2:0:-1]))
+    base_vertices = vertices[perimeter].copy()
+    base_vertices[:, 2] = min(0.0, float(vertices[:, 2].min())) - cfg.base_depth
+    base_center = np.array([[cfg.size[0] / 2, cfg.size[1] / 2, base_vertices[0, 2]]])
+    bottom = np.arange(len(perimeter)) + len(vertices)
+    next_top = np.roll(perimeter, -1)
+    next_bottom = np.roll(bottom, -1)
+    side_faces = np.concatenate(
+        (np.column_stack((perimeter, bottom, next_top)), np.column_stack((next_top, bottom, next_bottom)))
+    )
+    bottom_faces = np.column_stack((next_bottom, bottom, np.full(len(bottom), len(vertices) + len(bottom))))
+    mesh = trimesh.Trimesh(
+        vertices=np.concatenate((vertices, base_vertices, base_center)),
+        faces=np.concatenate((triangles, side_faces, bottom_faces)),
+    )
 
     x1 = int((cfg.size[0] * 0.5 - 1) / cfg.horizontal_scale)
     x2 = int((cfg.size[0] * 0.5 + 1) / cfg.horizontal_scale)
@@ -108,3 +131,5 @@ class HfStonyRoadTerrainCfg(HfTerrainBaseCfg):
     edge_wall_height: float = 0.15
     diagonal_wall_height: float = 0.05
     wall_thickness: float = 0.05
+    base_depth: float = 0.1
+    """Depth of the closed base below the lowest surface height (in m)."""

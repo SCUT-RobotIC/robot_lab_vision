@@ -7,12 +7,17 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
 import robot_lab.tasks.manager_based.locomotion.velocity.mdp as mdp
+from robot_lab.tasks.manager_based.locomotion.velocity.mdp.pyramid_slope import (
+    MeshInvertedPyramidSlopeTerrainCfg,
+    MeshPyramidSlopeTerrainCfg,
+)
 from robot_lab.tasks.manager_based.locomotion.velocity.mdp.stony_road import HfStonyRoadTerrainCfg
+from robot_lab.tasks.manager_based.locomotion.velocity.mdp.stony_road_generator import StonyRoadTerrainGeneratorCfg
 
 from .common import configure_wheeled_rc
 from .rough_env_cfg import RCRoughBaseEnvCfg
 
-RC_STONY_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
+RC_STONY_ROAD_CFG = StonyRoadTerrainGeneratorCfg(
     size=(8.0, 8.0),
     border_width=20.0,
     num_rows=10,
@@ -34,21 +39,21 @@ RC_STONY_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
             border_width=0.0,
         ),
         "light_stony_rough": HfStonyRoadTerrainCfg(
-            proportion=0.35,
+            proportion=0.30,
             noise_range=(0.01, 0.05),
             noise_step=0.01,
             downsampled_scale=0.05,
             border_width=0.0,
         ),
         "hard_stony_rough": HfStonyRoadTerrainCfg(
-            proportion=0.25,
+            proportion=0.15,
             noise_range=(0.05, 0.12),
             noise_step=0.02,
             downsampled_scale=0.05,
             border_width=0.0,
         ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-            proportion=0.075,
+            proportion=0.10,
             step_height_range=(0.10, 0.10),
             step_width=0.3,
             platform_width=1.0,
@@ -56,16 +61,28 @@ RC_STONY_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
             holes=False,
         ),
         "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
-            proportion=0.075,
+            proportion=0.10,
             step_height_range=(0.10, 0.10),
             step_width=0.3,
             platform_width=1.0,
             border_width=1.0,
             holes=False,
         ),
+        "pyramid_slope": MeshPyramidSlopeTerrainCfg(
+            proportion=0.05,
+            slope_angle=20.0,
+            platform_width=1.0,
+            border_width=1.0,
+        ),
+        "pyramid_slope_inv": MeshInvertedPyramidSlopeTerrainCfg(
+            proportion=0.05,
+            slope_angle=20.0,
+            platform_width=1.0,
+            border_width=1.0,
+        ),
     },
 )
-"""Stone-like random rough terrain mix for the RC quadruped."""
+"""Stone-road mix with balanced counts and at least 10% stairs in total."""
 
 
 @configclass
